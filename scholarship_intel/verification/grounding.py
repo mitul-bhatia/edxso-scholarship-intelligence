@@ -39,7 +39,13 @@ def _validate_value(field: str, value, quote: str) -> tuple[object | None, str]:
         return (None, why) if why else (q.strip(), "")
     if field in ("opening_date", "closing_date"):
         dates = {h.date.isoformat() for h in P.find_dates(q)}
-        return (value, "") if value in dates else (None, f"date {value} not written in quote")
+        if value not in dates:
+            return None, f"date {value} not written in quote"
+        if P.NEG_DATE.search(q):
+            return None, "quote is about a different date (referees, notification, results, programme dates, bank details…), not the application window"
+        if field == "closing_date" and not P.closing_strength(q) and not re.search(r"\b(until|till|by|before|due|deadline|close[sd]?|last date|ends?)\b", q, re.I):
+            return None, "quote does not state that this is a closing / deadline date"
+        return value, ""
     if field == "amount":
         # A number on a scholarship site is not necessarily a scholarship
         # benefit (for example, an alumnus describing their VC fund).
@@ -125,6 +131,23 @@ def ground_extraction(ex: Extraction, hay: Haystack, links: list[Link]) -> tuple
     return grounded, rejected
 
 
+def revalidate(facts: dict[str, Grounded]) -> tuple[dict[str, Grounded], list[Rejected]]:
+    """Re-apply the CURRENT value-vs-quote validators to facts stored by an earlier run (no LLM call needed), so a fix to a
+    validator immediately removes facts the old validator let through."""
+    kept: dict[str, Grounded] = {}
+    rejected: list[Rejected] = []
+    for f, g in facts.items():
+        if g.kind == "LINK":
+            kept[f] = g
+            continue
+        val, why = _validate_value(f, g.value, g.quote)
+        if val is None:
+            rejected.append(Rejected(f, g.value, g.quote, f"re-validation: {why}", g.extractor))
+        else:
+            kept[f] = g
+    return kept, rejected
+
+
 # ------------------------------------------------------------------------------- cross-extractor merge
 def _norm_equal(field: str, a, b) -> float:
     """1.0 agree, 0.5 partial, 0.0 conflict."""
@@ -175,6 +198,8 @@ def _union_if_justified(fld: str, opinions: list[tuple[str, Grounded]], per_extr
     union = set().union(*sets)
     if all(s == sets[0] for s in sets):
         return None
+    if any(a < b for a in sets for b in sets):
+        return None        # one answer is a subset of the other: the extra value rests on a single extractor – do not union it in
     pool = [g[ "eligibility_text"] for _, g in per_extractor if "eligibility_text" in g] + [o for _, o in opinions]
     for cand in pool:
         if len(V.enum_values_supported_by(cand.quote, fld, sorted(union))) == len(union):

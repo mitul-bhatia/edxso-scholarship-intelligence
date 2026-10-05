@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS crawl_runs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   started_at TEXT NOT NULL, finished_at TEXT,
-  mode TEXT NOT NULL DEFAULT 'live',          -- live | replay (demo overlay)
+  mode TEXT NOT NULL DEFAULT 'live',          -- live | offline cache replay
   as_of TEXT, label TEXT, stats_json TEXT, notes TEXT
 );
 
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS pages (
   run_id INTEGER, url TEXT, final_url TEXT, domain TEXT, status_code INTEGER, content_type TEXT,
   fetched_at TEXT, content_hash TEXT, title TEXT, text TEXT, text_len INTEGER, links_json TEXT,
   error TEXT, tls_verified INTEGER, last_modified TEXT, needs_ocr INTEGER DEFAULT 0,
-  simulated INTEGER DEFAULT 0, page_kind TEXT, kind_score REAL
+  page_kind TEXT, kind_score REAL
 );
 CREATE INDEX IF NOT EXISTS idx_pages_url ON pages(url);
 
@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS changes (
   scholarship_id INTEGER NOT NULL REFERENCES scholarships(id) ON DELETE CASCADE,
   run_id INTEGER, field TEXT, change_type TEXT,  -- NEW | FIELD_CHANGED | FIELD_ADDED | FIELD_UNSUPPORTED | STATUS_CHANGED
   old_value TEXT, new_value TEXT, detected_at TEXT, source_url TEXT,
-  old_evidence TEXT, new_evidence TEXT, simulated INTEGER DEFAULT 0, note TEXT
+  old_evidence TEXT, new_evidence TEXT, note TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_changes_sch ON changes(scholarship_id);
 

@@ -1,4 +1,4 @@
-"""Command line: run a crawl, serve the dashboard, show stats, schedule repeats, run the change-detection demo."""
+"""Command line: crawl, inspect, export, audit and serve the scholarship repository."""
 from __future__ import annotations
 
 import argparse
@@ -48,7 +48,7 @@ def cmd_stats(args) -> int:
 
 
 def cmd_audit(args) -> int:
-    """Report the assignment's minimum output counts without inflating demo data."""
+    """Report assignment minimums using observed source changes only."""
     conn = connect(args.db, readonly=True)
     counts = rows(conn, """SELECT COUNT(*) records,
         COALESCE(SUM(official_source_verified),0) official_source_verified,
@@ -56,12 +56,10 @@ def cmd_audit(args) -> int:
         COALESCE(SUM(status IN ('EXPIRED','NO_LONGER_VERIFIABLE')),0) expired_or_stale,
         COUNT(DISTINCT source_type) source_types FROM scholarships""")[0]
     counts["real_field_changes"] = rows(conn, """SELECT COUNT(*) n FROM changes
-        WHERE change_type IN ('FIELD_CHANGED','FIELD_ADDED','FIELD_UNSUPPORTED') AND simulated=0
+        WHERE change_type IN ('FIELD_CHANGED','FIELD_ADDED','FIELD_UNSUPPORTED')
         AND COALESCE(note,'') NOT LIKE 'EXTRACTION_CORRECTION:%'""")[0]["n"]
     counts["extraction_corrections"] = rows(conn, """SELECT COUNT(*) n FROM changes
         WHERE COALESCE(note,'') LIKE 'EXTRACTION_CORRECTION:%'""")[0]["n"]
-    counts["demo_field_changes"] = rows(conn, """SELECT COUNT(*) n FROM changes
-        WHERE change_type IN ('FIELD_CHANGED','FIELD_ADDED','FIELD_UNSUPPORTED') AND simulated=1""")[0]["n"]
     checks = {"20+ real records": counts["records"] >= 20,
               "15+ official-source records": counts["official_source_verified"] >= 15,
               "10+ confidence >=95": counts["confidence_95"] >= 10,
@@ -118,11 +116,6 @@ def cmd_schedule(args) -> int:
         time.sleep(every)
 
 
-def cmd_demo(args) -> int:
-    from .demo import run_demo
-    return run_demo(args)
-
-
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="scholarship_intel", description="Atlas Scholarship Intelligence Crawler")
     ap.add_argument("--db", default=None, help="SQLite path (default data/atlas.db or $ATLAS_DB)")
@@ -147,10 +140,6 @@ def main(argv=None) -> int:
     p = sub.add_parser("snapshot", help="make the DB a single read-only-safe file for deployment"); p.set_defaults(fn=cmd_snapshot)
     p = sub.add_parser("serve"); p.add_argument("--host", default="127.0.0.1"); p.add_argument("--port", type=int, default=8000); p.set_defaults(fn=cmd_serve)
     p = sub.add_parser("schedule", help="repeat crawls forever"); run_args(p); p.add_argument("--every-hours", default="24"); p.set_defaults(fn=cmd_schedule)
-    p = sub.add_parser("demo-changes", help="build the labelled change/expiry demo database from a real run")
-    p.add_argument("--source-db", default=None); p.add_argument("--out", default="data/atlas_demo.db"); p.add_argument("--llm", default="off")
-    p.set_defaults(fn=cmd_demo)
-
     args = ap.parse_args(argv)
     return args.fn(args)
 

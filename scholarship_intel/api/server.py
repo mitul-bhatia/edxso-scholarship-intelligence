@@ -8,7 +8,7 @@ import sqlite3
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from .. import config
@@ -118,7 +118,7 @@ def scholarship(sid: int):
     hist = rows(c, "SELECT run_id, SUM(points) total FROM confidence_breakdown WHERE scholarship_id=? AND component NOT IN ('cap','gate') GROUP BY run_id ORDER BY run_id", (sid,))
     status_hist = rows(c, "SELECT * FROM status_history WHERE scholarship_id=? ORDER BY id DESC", (sid,))
     rejected = rows(c, "SELECT field,proposed_value,proposed_quote,reason,extractor,created_at FROM rejected_extractions WHERE scholarship_key=? ORDER BY id DESC LIMIT 40", (s["key"],))
-    page = rows(c, "SELECT id,url,final_url,title,status_code,content_type,fetched_at,text_len,tls_verified,simulated FROM pages WHERE id=?", (s["primary_page_id"],))
+    page = rows(c, "SELECT id,url,final_url,title,status_code,content_type,fetched_at,text_len,tls_verified FROM pages WHERE id=?", (s["primary_page_id"],))
     src = rows(c, "SELECT * FROM sources WHERE domain=?", (s["official_domain"],))
     return {"scholarship": s, "evidence": ev, "breakdown": breakdown, "changes": changes, "status_history": status_hist, "rejected": rejected,
             "page": page[0] if page else None, "source": src[0] if src else None, "confidence_history": hist,
@@ -132,13 +132,13 @@ def evidence_context(eid: int, pad: int = 260):
     if not e:
         raise HTTPException(404, "evidence not found")
     e = e[0]
-    p = rows(c, "SELECT url,final_url,title,text,fetched_at,simulated FROM pages WHERE id=?", (e["page_id"],))
+    p = rows(c, "SELECT url,final_url,title,text,fetched_at FROM pages WHERE id=?", (e["page_id"],))
     if not p or e["char_start"] is None:
         return {"found": False, "quote": e["quote"], "page": p[0] if p else None}
     t = p[0]["text"]
     s, en = e["char_start"], e["char_end"]
     return {"found": True, "before": t[max(0, s - pad):s], "quote": t[s:en], "after": t[en:en + pad], "start": s, "end": en,
-            "page_url": p[0]["final_url"] or p[0]["url"], "title": p[0]["title"], "fetched_at": p[0]["fetched_at"], "simulated": p[0]["simulated"]}
+            "page_url": p[0]["final_url"] or p[0]["url"], "title": p[0]["title"], "fetched_at": p[0]["fetched_at"]}
 
 
 @app.get("/api/changes")
@@ -165,6 +165,49 @@ def leads():
 @app.get("/api/sources")
 def sources():
     return rows(_conn(), "SELECT s.*, (SELECT COUNT(*) FROM scholarships x WHERE x.official_domain=s.domain) n FROM sources s ORDER BY n DESC, domain")
+
+
+DOCS_DIR = Path(__file__).resolve().parents[2] / "docs"
+REPORT = Path(__file__).resolve().parents[2] / "output/pdf/Edxso_Scholarship_Intelligence_Technical_Report.pdf"
+DOC_PAGES = {
+    "technical-note": ("Technical note", "TECHNICAL_NOTE.md"),
+    "confidence": ("Confidence methodology", "CONFIDENCE.md"),
+}
+_DOC_STYLE = """
+ body{max-width:860px;margin:0 auto;padding:24px 20px 80px;line-height:1.6}
+ h1,h2{letter-spacing:-.01em} h2{margin-top:1.6em;border-bottom:1px solid var(--line);padding-bottom:.2em}
+ table{font-size:.9rem} code{background:var(--surface2);padding:1px 5px;border-radius:5px;font-size:.88em}
+ pre{background:var(--surface2);padding:12px;border-radius:10px;overflow:auto} pre code{background:none;padding:0}
+ .bar{display:flex;gap:14px;align-items:center;margin-bottom:18px;font-size:.9rem}
+ @media print{.bar{display:none} body{max-width:none;padding:0;font-size:10.5pt} h2{margin-top:1em} a{color:inherit}}
+"""
+
+
+@app.get("/doc/{name}", response_class=HTMLResponse)
+def doc(name: str):
+    """Project documents rendered as web pages (printable to PDF), so the live site is a complete submission."""
+    if name not in DOC_PAGES:
+        raise HTTPException(404, "unknown document")
+    title, fname = DOC_PAGES[name]
+    path = DOCS_DIR / fname
+    if not path.is_file():
+        raise HTTPException(404, "document not packaged with this deployment")
+    try:
+        import markdown
+    except ImportError:                                            # dashboard keeps working without the renderer
+        raise HTTPException(503, "markdown renderer not installed")
+    body = markdown.markdown(path.read_text(encoding="utf-8"), extensions=["tables", "fenced_code", "sane_lists"])
+    links = " · ".join(f'<a href="/doc/{k}">{v[0]}</a>' for k, v in DOC_PAGES.items())
+    return HTMLResponse(f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title} – Atlas Scholarship Intelligence</title><link rel="stylesheet" href="/static/styles.css"><style>{_DOC_STYLE}</style></head>
+<body><div class="bar"><a href="/">← Dashboard</a> {links} <a href="javascript:window.print()">Print / save as PDF</a></div>{body}</body></html>""")
+
+
+@app.get("/report")
+def report():
+    if not REPORT.is_file():
+        raise HTTPException(404, "technical report is not packaged with this deployment")
+    return FileResponse(REPORT, media_type="application/pdf", filename=REPORT.name, content_disposition_type="inline")
 
 
 @app.get("/")

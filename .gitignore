@@ -7,11 +7,10 @@ __pycache__/
 data/logs/
 data/cache/
 data/*.db-journal
-data/atlas_demo.db
-data/atlas_demo.db-*
 .pytest_cache/
 .DS_Store
 .vercel/
+tmp/
 docs/PLAN.md
 data/backups/
 data/*.bak

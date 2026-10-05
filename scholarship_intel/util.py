@@ -105,6 +105,7 @@ def looks_like_list_title(title: str) -> bool:
     t = title.strip()
     ascii_ratio = sum(c.isascii() for c in t) / max(1, len(t))
     return (ascii_ratio < 0.9 or bool(re.match(r"^(top|best|why|discover|how|what|list of|complete list|\d+\s|q\s?\d+[.)]|question)", t, re.I))
+            or bool(re.match(r"^(application process|additional awards|award letters of scholarships|stipend, contingency grant and prize money)\b", t, re.I))
             or t.endswith("?")
             or bool(re.search(r"\b(faqs?|frequently asked|complete list|guide to)\b", t, re.I))
             or bool(re.search(r"\b(scholarships)\b", t, re.I) and len(distinctive_tokens(t)) < 2))

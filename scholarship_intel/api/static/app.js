@@ -47,8 +47,6 @@ addEventListener("hashchange", route);
 async function banner() {
   const st = await api("/stats");
   $("#dbnote").textContent = `data as of ${st.today} · ${st.runs} crawl run${st.runs === 1 ? "" : "s"}`;
-  const b = $("#banner");
-  if (st.meta && st.meta.demo_notice) { b.hidden = false; b.textContent = st.meta.demo_notice; } else b.hidden = true;
 }
 
 // ------------------------------------------------------------------ dashboard
@@ -142,10 +140,10 @@ async function detail(id) {
   const compHtml = bd.map(b => `<div class="comp"><div class="row"><span>${b.component.replace(/_/g, " ")}</span><span>${b.points.toFixed(1)} / ${b.weight}</span></div><div class="track"><div class="fill" style="width:${b.score * 100}%;background:${confColor(b.score * 100)}"></div></div><p>${esc(b.detail)}</p></div>`).join("");
   const extraHtml = extra.map(b => `<div class="note ${b.component === "conflict_penalty" ? "c-bad" : "c-warn"}"><b>${b.component === "cap" ? "Cap" : b.component === "gate" ? "Gate" : "Penalty"}:</b> ${esc(b.detail)}${b.points ? ` (${b.points} pts)` : ""}</div>`).join("");
   const ch = d.changes.map(c => {
-    if (c.change_type === "NEW") return `<li class="new"><b>Discovered</b> <span class="muted">${fmtDT(c.detected_at)}</span>${c.simulated ? '<span class="tag">SIMULATED</span>' : ""}<div class="muted">${esc(c.note || "")}</div></li>`;
-    if (c.change_type === "STATUS_CHANGED") return `<li class="chg"><b>Status changed</b> <span class="muted">${fmtDT(c.detected_at)}</span>${c.simulated ? '<span class="tag">SIMULATED</span>' : ""}<div class="diff"><span class="old">${esc(c.old_value)}</span><span>→</span><span class="new">${esc(c.new_value)}</span></div><div class="muted">${esc(c.note || "")}</div>${c.new_evidence ? `<details><summary>evidence</summary><div class="ctx">${esc(c.new_evidence)}</div></details>` : ""}</li>`;
+    if (c.change_type === "NEW") return `<li class="new"><b>Discovered</b> <span class="muted">${fmtDT(c.detected_at)}</span><div class="muted">${esc(c.note || "")}</div></li>`;
+    if (c.change_type === "STATUS_CHANGED") return `<li class="chg"><b>Status changed</b> <span class="muted">${fmtDT(c.detected_at)}</span><div class="diff"><span class="old">${esc(c.old_value)}</span><span>→</span><span class="new">${esc(c.new_value)}</span></div><div class="muted">${esc(c.note || "")}</div>${c.new_evidence ? `<details><summary>evidence</summary><div class="ctx">${esc(c.new_evidence)}</div></details>` : ""}</li>`;
     const corrected = (c.note || "").startsWith("EXTRACTION_CORRECTION:");
-    return `<li class="chg"><b>${corrected ? "EXTRACTION CORRECTION" : c.change_type === "FIELD_CHANGED" ? "CHANGE DETECTED" : c.change_type.replace(/_/g, " ")}</b> · ${esc(c.field)} <span class="muted">${fmtDT(c.detected_at)}</span>${c.simulated ? '<span class="tag">SIMULATED SOURCE EDIT</span>' : ""}
+    return `<li class="chg"><b>${corrected ? "EXTRACTION CORRECTION" : c.change_type === "FIELD_CHANGED" ? "CHANGE DETECTED" : c.change_type.replace(/_/g, " ")}</b> · ${esc(c.field)} <span class="muted">${fmtDT(c.detected_at)}</span>
       <div class="diff"><span class="old">${c.old_value == null ? "Not specified" : esc(c.old_value.slice(0, 160))}</span><span>→</span><span class="new">${c.new_value == null ? "Not specified" : esc(c.new_value.slice(0, 160))}</span></div>
       <div class="muted">Source: <a href="${esc(c.source_url)}" target="_blank" rel="noopener">${esc(c.source_url)}</a></div>
       ${c.note ? `<div class="muted">${esc(c.note)}</div>` : ""}
@@ -174,7 +172,7 @@ async function detail(id) {
     <div class="card" style="margin-top:16px"><h2>Official source</h2>
       <p style="margin:0 0 6px"><span class="mono">${esc(s.official_domain)}</span> ${src ? chip("tier " + src.tier, "c-gray") : ""}</p>
       <p class="muted" style="margin:0 0 8px">${esc(src ? src.reason : "")}</p>
-      ${p ? `<p class="muted" style="margin:0">Snapshot: ${esc(p.title || "")}<br>HTTP ${p.status_code} · ${p.text_len.toLocaleString()} chars · fetched ${fmtDT(p.fetched_at)}${p.tls_verified ? "" : " · TLS certificate not verifiable"}${p.simulated ? ' <span class="tag">SIMULATED</span>' : ""}</p>` : ""}</div>
+      ${p ? `<p class="muted" style="margin:0">Snapshot: ${esc(p.title || "")}<br>HTTP ${p.status_code} · ${p.text_len.toLocaleString()} chars · fetched ${fmtDT(p.fetched_at)}${p.tls_verified ? "" : " · TLS certificate not verifiable"}</p>` : ""}</div>
     <div class="card" style="margin-top:16px"><h2>Unsupported claims rejected</h2>
       <p class="muted" style="margin-top:0">Anything an extractor proposed that could not be found verbatim in the source (or contradicted its quote) is discarded and logged.</p>
       ${rej ? `<table><thead><tr><th>Field</th><th>Proposed</th><th>Why rejected</th><th>By</th></tr></thead><tbody>${rej}</tbody></table>` : '<p class="muted">None for this record.</p>'}</div>
@@ -202,7 +200,7 @@ async function changesPage() {
   app.innerHTML = `<h1>Change feed</h1><p class="muted">Source changes and extraction corrections are distinguished. Each difference retains its old value, new value, date, source and evidence.</p>
   <table><thead><tr><th>Detected</th><th>Scholarship</th><th>Type</th><th>Field</th><th>Old → New</th></tr></thead><tbody>${ch.map(c => `
     <tr data-id="${c.scholarship_id}"><td>${fmtDT(c.detected_at)}</td><td><b>${esc(c.scholarship_name)}</b><div class="sub">${esc(c.official_domain)}</div></td>
-    <td>${chip((c.note || "").startsWith("EXTRACTION_CORRECTION:") ? "EXTRACTION CORRECTION" : c.change_type === "FIELD_CHANGED" ? "CHANGE DETECTED" : c.change_type.replace(/_/g, " "), c.change_type === "NEW" ? "c-ok" : "c-warn")}${c.simulated ? '<span class="tag">SIMULATED</span>' : ""}</td>
+    <td>${chip((c.note || "").startsWith("EXTRACTION_CORRECTION:") ? "EXTRACTION CORRECTION" : c.change_type === "FIELD_CHANGED" ? "CHANGE DETECTED" : c.change_type.replace(/_/g, " "), c.change_type === "NEW" ? "c-ok" : "c-warn")}</td>
     <td>${esc(c.field)}</td><td>${c.change_type === "NEW" ? '<span class="muted">newly discovered</span>' : `<div class="diff"><span class="old">${c.old_value == null ? "Not specified" : esc(c.old_value.slice(0, 80))}</span><span>→</span><span class="new">${c.new_value == null ? "Not specified" : esc(c.new_value.slice(0, 80))}</span></div>`}</td></tr>`).join("")}</tbody></table>`;
   document.querySelectorAll("tbody tr").forEach(tr => tr.onclick = () => location.hash = "#/s/" + tr.dataset.id);
 }

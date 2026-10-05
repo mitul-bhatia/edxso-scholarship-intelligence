@@ -11,3 +11,4 @@ fastapi>=0.110
 uvicorn[standard]>=0.27
 ddgs>=9.0          # free web-search discovery (no API key)
 pytest>=8.0
+markdown>=3.5       # renders /doc/* pages on the dashboard

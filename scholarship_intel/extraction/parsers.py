@@ -60,9 +60,40 @@ _OPEN_CUES = re.compile(r"(opening\s*date|open(s|ed)?\s*(on|from)|start(s|ing)?\
                         r"invited\s*(from|w\.e\.f)|w\.e\.f\.?|from\s*$|applications?\s*(start|open)|registration\s*(starts|opens))", re.I)
 
 
+# A date in a sentence about any of these is NOT the application deadline (referees, results, programme dates, bank details…).
+NEG_DATE = re.compile(r"(referee|reference letters?|recommendation|notified|notification|will be informed|announce|results?\b|shortlist|interview|"
+                      r"aptitude|test (date|will)|programme dates?|program dates?|programme (start|begin)|commenc|start(s|ing)? (of )?the (programme|course|session|fellowship)|"
+                      r"\bbank\b|\bPAN\b|account details|orientation|joining|departure|travel|disburs|communication from|must assume|hard cop|courier|"
+                      r"host applications?|visa|proposed programme)", re.I)
+# Phrases that explicitly say "this is the deadline for APPLICATIONS".
+STRONG_CLOSE = re.compile(r"(deadline for (all |the |your )?(online )?applications?|application (deadline|due date|closing date)|"
+                          r"last date (to|for|of) (online )?(apply|applying|application|registration|submi\w+)|apply (by|before|until|till)|"
+                          r"applications? (will )?(close|closes|closing)|applications? (are |is )?(open|accepted|invited) (until|till|up to)|"
+                          r"(open|opens) (from|on)[^.]{0,45}(till|until|to) |closing date (for|of) (the )?(online )?applications?|"
+                          r"submit(ted)? (your |the )?(online )?applications? (by|before|until|on or before))", re.I)
+_APP_WORD = re.compile(r"appl|regist|submi|nominat|enrol", re.I)
+
+
+def closing_strength(sentence: str) -> int:
+    """0 = not an application deadline (or negative context), 1 = generic deadline wording, 2 = deadline + application context, 3 = explicit."""
+    if NEG_DATE.search(sentence):
+        return 0
+    if STRONG_CLOSE.search(sentence):
+        return 3
+    if _CLOSE_CUES.search(sentence):
+        return 2 if _APP_WORD.search(sentence) else 1
+    if _APP_WORD.search(sentence) and re.search(r"\b(until|till|up ?to|before|by|on or before)\b", sentence, re.I):
+        return 2                              # "Open for applications until 6 October 2026"
+    return 0
+
+
 def classify_date_context(text: str, hit: DateHit) -> str:
     """Return 'closing', 'opening' or 'other' from the words just before the date."""
     ls = text.rfind("\n", 0, hit.start) + 1
+    le = text.find("\n", hit.end)
+    line = text[ls: len(text) if le < 0 else le]
+    if NEG_DATE.search(line[:600]):
+        return "other"                      # e.g. referee deadline, results date, programme dates, bank-details deadline
     before = text[max(ls, hit.start - 90): hit.start]
     after = text[hit.end: min(len(text), hit.end + 40)]
     best, kind = -1, "other"

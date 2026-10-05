@@ -48,7 +48,7 @@ _AS_OF_OVERRIDE: dt.date | None = None
 
 
 def set_as_of(d: dt.date | None) -> None:
-    """Lets the CLI/demo pin the logical date (used for lifecycle logic only, never for evidence)."""
+    """Lets the CLI pin the logical date for lifecycle checks, never for source evidence."""
     global _AS_OF_OVERRIDE
     _AS_OF_OVERRIDE = d
 

@@ -152,28 +152,40 @@ def _provider(text: str, title: str) -> Claim | None:
 def _dates(text: str) -> dict[str, Claim]:
     out: dict[str, Claim] = {}
     hits = P.find_dates(text)
-    closing, opening = [], []
-    for h in hits:
+    closing: list[tuple[int, P.DateHit, bool]] = []         # (strength, hit, mentions an extension)
+    opening: list[P.DateHit] = []
+    for i, h in enumerate(hits):
         kind = P.classify_date_context(text, h)
-        (closing if kind == "closing" else opening if kind == "opening" else []).append(h)
-    # "from X to Y" ranges
-    for i, h in enumerate(hits[:-1]):
-        nxt = hits[i + 1]
-        between = text[h.end:nxt.start]
-        if len(between) < 25 and re.fullmatch(r"\s*(to|till|until|-|–|and)\s*", between, re.I):
-            if P.classify_date_context(text, h) in ("opening", "other") and h not in opening:
-                opening.append(h)
-            if nxt not in closing:
-                closing.append(nxt)
+        sent = _quote_for(text, h.start, h.end, 160, 80)[0]
+        if kind == "closing":
+            strength = P.closing_strength(sent)
+            if strength:
+                closing.append((strength, h, bool(re.search(r"extend|revised|postpone", sent, re.I))))
+        elif kind == "opening":
+            opening.append(h)
+        # "from X to Y" windows: the second date closes the window
+        if i + 1 < len(hits):
+            nxt = hits[i + 1]
+            between = text[h.end:nxt.start]
+            if len(between) < 25 and re.fullmatch(r"\s*(to|till|until|-|–|and)\s*", between, re.I) and not P.NEG_DATE.search(sent):
+                if kind != "closing":
+                    opening.append(h)
+                if not any(c[1] is nxt for c in closing):
+                    closing.append((2, nxt, False))
     if closing:
-        best = max(closing, key=lambda h: h.date)           # extensions supersede earlier dates
-        s, st, en = _quote_for(text, best.start, best.end)
-        alts = sorted({h.date.isoformat() for h in closing if h is not best})
-        out["closing_date"] = Claim("closing_date", best.date.isoformat(), s, NAME, alt_values=alts)
+        top = max(c[0] for c in closing)
+        best_pool = [c for c in closing if c[0] == top]
+        ext = [c for c in best_pool if c[2]]
+        # equally explicit candidates: an announced extension supersedes; otherwise the earliest (conservative)
+        pick = max(ext, key=lambda c: c[1].date) if ext else min(best_pool, key=lambda c: c[1].date)
+        best = pick[1]
+        s_, st, en = _quote_for(text, best.start, best.end)
+        alts = sorted({c[1].date.isoformat() for c in closing if c[1] is not best})
+        out["closing_date"] = Claim("closing_date", best.date.isoformat(), s_, NAME, alt_values=alts)
     if opening:
-        best = max(opening, key=lambda h: h.date) if len(opening) == 1 else sorted(opening, key=lambda h: h.date)[-1]
-        s, st, en = _quote_for(text, best.start, best.end)
-        out["opening_date"] = Claim("opening_date", best.date.isoformat(), s, NAME)
+        best = sorted(opening, key=lambda h: h.date)[-1] if len(opening) > 1 else opening[0]
+        s_, st, en = _quote_for(text, best.start, best.end)
+        out["opening_date"] = Claim("opening_date", best.date.isoformat(), s_, NAME)
     return out
 
 

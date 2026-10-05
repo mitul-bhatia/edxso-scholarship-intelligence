@@ -42,7 +42,6 @@ class Record:
     score: ScoreResult
     status: Status
     content_hash: str
-    simulated: bool = False
     official_verified: bool = False
     extractors: list[str] = field(default_factory=list)
 
@@ -128,10 +127,10 @@ class Repo:
         from ..util import host_of
         cur = self.conn.execute(
             """INSERT INTO pages(run_id,url,final_url,domain,status_code,content_type,fetched_at,content_hash,title,text,text_len,
-               links_json,error,tls_verified,last_modified,needs_ocr,simulated,page_kind,kind_score) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               links_json,error,tls_verified,last_modified,needs_ocr,page_kind,kind_score) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (run_id, r.url, r.final_url, host_of(r.final_url or r.url), r.status, r.content_type, r.fetched_at, r.content_hash, r.title,
              r.text, len(r.text), json.dumps([{"u": l.url, "t": l.text} for l in r.links[:300]]), r.error, int(r.tls_verified),
-             r.last_modified, int(r.needs_ocr), int(r.simulated), kind, kind_score))
+             r.last_modified, int(r.needs_ocr), kind, kind_score))
         self.conn.commit()
         return cur.lastrowid
 
@@ -182,7 +181,6 @@ class Repo:
         cols = flatten(rec.facts)
         existing = self.find_existing(rec.official_url, rec.key, rec.name, rec.source.domain)
         changes: list[dict] = []
-        simulated = int(rec.simulated)
         base = dict(
             name=rec.name, provider=rec.provider, source_type=rec.source.source_type, source_tier=rec.source.tier,
             official_url=rec.official_url, official_domain=rec.source.domain, status=rec.status.status, status_reason=rec.status.reason,
@@ -198,7 +196,7 @@ class Repo:
             names = ",".join(base.keys())
             cur = self.conn.execute(f"INSERT INTO scholarships({names}) VALUES ({','.join('?' * len(base))})", tuple(base.values()))
             sid = cur.lastrowid
-            self._change(sid, run_id, "*", "NEW", None, rec.name, rec.official_url, None, None, simulated, "newly discovered scholarship")
+            self._change(sid, run_id, "*", "NEW", None, rec.name, rec.official_url, None, None, "newly discovered scholarship")
             changes.append({"field": "*", "type": "NEW"})
             self.conn.execute("INSERT INTO status_history(scholarship_id,run_id,old_status,new_status,reason,at) VALUES (?,?,?,?,?,?)",
                               (sid, run_id, None, rec.status.status, rec.status.reason, now))
@@ -226,12 +224,12 @@ class Repo:
                 if same_source_text:
                     note = "EXTRACTION_CORRECTION: official page content is unchanged; extractor output or validation changed"
                 self._change(sid, run_id, f, ctype, old, new, (rec.facts[ev_field].source_url if ev_field in rec.facts else None) or rec.official_url,
-                             old_q, new_q, simulated, note)
+                             old_q, new_q, note)
                 changes.append({"field": f, "type": ctype, "old": old, "new": new})
                 changed_any = True
             if existing["status"] != rec.status.status:
                 self._change(sid, run_id, "status", "STATUS_CHANGED", existing["status"], rec.status.status, rec.official_url, None,
-                             rec.status.evidence_quote, simulated, rec.status.reason)
+                             rec.status.evidence_quote, rec.status.reason)
                 self.conn.execute("INSERT INTO status_history(scholarship_id,run_id,old_status,new_status,reason,at) VALUES (?,?,?,?,?,?)",
                                   (sid, run_id, existing["status"], rec.status.status, rec.status.reason, now))
                 changes.append({"field": "status", "type": "STATUS_CHANGED", "old": existing["status"], "new": rec.status.status})
@@ -246,12 +244,12 @@ class Repo:
         self.conn.commit()
         return sid, changes
 
-    def _change(self, sid, run_id, field, ctype, old, new, url, old_ev, new_ev, simulated, note) -> None:
+    def _change(self, sid, run_id, field, ctype, old, new, url, old_ev, new_ev, note) -> None:
         self.conn.execute(
-            """INSERT INTO changes(scholarship_id,run_id,field,change_type,old_value,new_value,detected_at,source_url,old_evidence,new_evidence,simulated,note)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            """INSERT INTO changes(scholarship_id,run_id,field,change_type,old_value,new_value,detected_at,source_url,old_evidence,new_evidence,note)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
             (sid, run_id, field, ctype, None if old is None else str(old), None if new is None else str(new), config.now_iso(), url,
-             old_ev, new_ev, simulated, note))
+             old_ev, new_ev, note))
 
     def _write_evidence(self, sid: int, run_id: int, rec: Record, now: str) -> None:
         self.conn.execute("UPDATE field_evidence SET is_current=0 WHERE scholarship_id=?", (sid,))
@@ -321,7 +319,7 @@ class Repo:
         self.conn.commit()
 
     # ------------------------------------------------------------------ not-seen bookkeeping
-    def mark_missing(self, sid: int, run_id: int, status: Status, source_url: str, simulated: bool = False) -> None:
+    def mark_missing(self, sid: int, run_id: int, status: Status, source_url: str) -> None:
         """Official URL failed / scholarship vanished: update lifecycle without touching previously verified values."""
         row = self.conn.execute("SELECT status FROM scholarships WHERE id=?", (sid,)).fetchone()
         now = config.now_iso()
@@ -331,7 +329,7 @@ class Repo:
             (status.status, status.reason, status.miss_count, label, run_id, status.status, now, sid))
         if row["status"] != status.status:
             self._change(sid, run_id, "status", "STATUS_CHANGED", row["status"], status.status, source_url, None, status.evidence_quote,
-                         int(simulated), status.reason)
+                         status.reason)
             self.conn.execute("INSERT INTO status_history(scholarship_id,run_id,old_status,new_status,reason,at) VALUES (?,?,?,?,?,?)",
                               (sid, run_id, row["status"], status.status, status.reason, now))
         self.conn.commit()

@@ -204,7 +204,7 @@ class Pipeline:
             st = lifecycle.determine(fetch_ok=False, fetch_status=res.status, fetch_error=res.error, gone=res.gone, transient=res.transient,
                                      needs_ocr=res.needs_ocr, name_found=True, is_scholarship_page=True, closing=None, has_rolling_note=False,
                                      text="", prior_miss_count=existing["miss_count"] or 0, today=today, name=existing["name"])
-            self.repo.mark_missing(existing["id"], self.run_id, st, url, simulated=res.simulated)
+            self.repo.mark_missing(existing["id"], self.run_id, st, url)
             self.saved_ids.add(existing["id"])
             self.stats[f"status_{st.status}"] += 1
             self.log(f"  ✗ {existing['name'][:60]!r}: {st.status} – {st.reason}")
@@ -240,6 +240,8 @@ class Pipeline:
         rejected_all = []
         if existing is not None and not self._needs_reextraction(existing, res):
             facts, absent_prev, agreement, conflicts, n_extractors, extractors = load_facts(existing["facts_json"])
+            facts, revalidated_out = grounding.revalidate(facts)
+            rejected_all.extend(revalidated_out)
             reused = True
             is_scholarship = True
             self.stats["unchanged_pages"] += 1
@@ -284,7 +286,7 @@ class Pipeline:
                 st = lifecycle.determine(fetch_ok=True, fetch_status=res.status, fetch_error="", gone=False, transient=False, needs_ocr=False,
                                          name_found=nf, is_scholarship_page=is_scholarship, closing=None, has_rolling_note=False, text=text,
                                          prior_miss_count=existing["miss_count"] or 0, today=today, name=existing["name"])
-                self.repo.mark_missing(existing["id"], self.run_id, st, url, simulated=res.simulated)
+                self.repo.mark_missing(existing["id"], self.run_id, st, url)
                 self.saved_ids.add(existing["id"])
                 self.stats[f"status_{st.status}"] += 1
                 self.log(f"  ✗ {existing['name'][:60]!r}: {st.status} – {st.reason}")
@@ -364,7 +366,7 @@ class Pipeline:
         official_verified = bool(sc.official and name_loc != "missing" and not res.needs_ocr)
         rec = Record(key=key, name=name, provider=provider, source=sc, official_url=official_url, primary_page_id=page_id, discovered_via=via,
                      facts=facts, absent=absent, agreement=agreement, conflicts=conflicts, n_extractors=n_extractors, score=score,
-                     status=status, content_hash=res.content_hash, simulated=res.simulated, official_verified=official_verified,
+                     status=status, content_hash=res.content_hash, official_verified=official_verified,
                      extractors=extractors)
         sid, changes = self.repo.save(self.run_id, rec)
         self.saved_ids.add(sid)

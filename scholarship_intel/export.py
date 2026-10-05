@@ -19,7 +19,7 @@ def export(db: str | Path | None, out_dir: str | Path) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     recs = rows(conn, "SELECT * FROM scholarships ORDER BY confidence DESC, id")
     with open(out / "scholarships.csv", "w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=CSV_FIELDS, extrasaction="ignore")
+        w = csv.DictWriter(fh, fieldnames=CSV_FIELDS, extrasaction="ignore", lineterminator="\n")
         w.writeheader()
         w.writerows(recs)
     full = []
@@ -29,7 +29,7 @@ def export(db: str | Path | None, out_dir: str | Path) -> dict:
                         "WHERE scholarship_id=? AND is_current=1 ORDER BY id", (r["id"],))
         br = rows(conn, "SELECT component,weight,score,points,detail FROM confidence_breakdown WHERE scholarship_id=? AND run_id=(SELECT MAX(run_id) "
                         "FROM confidence_breakdown WHERE scholarship_id=?) ORDER BY id", (r["id"], r["id"]))
-        ch = rows(conn, "SELECT field,change_type,old_value,new_value,detected_at,source_url,simulated FROM changes WHERE scholarship_id=? ORDER BY id", (r["id"],))
+        ch = rows(conn, "SELECT field,change_type,old_value,new_value,detected_at,source_url FROM changes WHERE scholarship_id=? ORDER BY id", (r["id"],))
         full.append({**r, "evidence": ev, "confidence_breakdown": br, "change_history": ch})
     (out / "scholarships_full.json").write_text(json.dumps(full, indent=1, ensure_ascii=False, default=str), encoding="utf-8")
     changes = rows(conn, "SELECT ch.*, s.name scholarship FROM changes ch JOIN scholarships s ON s.id=ch.scholarship_id ORDER BY ch.id")

@@ -22,6 +22,11 @@ _NEWS_PATH = re.compile(r"/(media[-_ ]?releases?|press[-_ ]?releases?|newsroom|n
 
 def relevance_gate(url_host: str, source: SourceClass, text: str, url: str = "") -> str | None:
     """Return a human-readable rejection reason, or None if the document may proceed."""
+    if url_host.endswith("chevening.org") and re.search(r"/asean[-_/]", url, re.I):
+        return "ASEAN-specific programme; not an Indian scholarship opportunity"
+    if (url and re.search(r"for[-_ ]?u[-_.]?s[-_.]?[-_ ]?citizens?|us[-_]citizen", url, re.I)) or re.search(
+            r"(open|available|eligible) (only )?(to|for) U\.?S\.? citizens|U\.?S\. citizens (only|who wish to)", text[:4000], re.I):
+        return "programme for U.S. citizens, not open to Indian students"
     if url and _NEWS_PATH.search(url.split("?")[0]):
         return "news / press-release page about a programme, not the programme's own page"
     closing = sum(1 for h in P.find_dates(text) if P.classify_date_context(text, h) == "closing")

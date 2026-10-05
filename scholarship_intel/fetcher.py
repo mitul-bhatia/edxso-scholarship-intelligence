@@ -1,5 +1,4 @@
-"""Polite fetcher: robots.txt, per-domain rate limiting, retries, TLS fallback, HTML+PDF parsing,
-an on-disk raw cache (so a run can be replayed offline) and a *labelled* overlay hook used only by the demo."""
+"""Polite fetcher with robots.txt, rate limiting, retries, HTML/PDF parsing and an offline cache."""
 from __future__ import annotations
 
 import json
@@ -46,7 +45,6 @@ class FetchResult:
     needs_ocr: bool = False
     fetched_at: str = ""
     from_cache: bool = False
-    simulated: bool = False
     is_pdf: bool = False
     rendered: bool = False            # text obtained by executing JavaScript (Playwright)
 
@@ -64,22 +62,13 @@ class FetchResult:
         return self.status in (-1, 0, 401, 403, 406, 408, 425, 429, 451) or self.status >= 500
 
 
-@dataclass
-class Overlay:
-    """A deliberately artificial modification of a source page (DEMO ONLY, always flagged simulated)."""
-    status: int | None = None
-    replacements: list[tuple[str, str]] = field(default_factory=list)   # (regex, replacement)
-    note: str = ""
-
-
 class Fetcher:
-    def __init__(self, mode: str = "live", cache_dir: Path | None = None, overlays: dict[str, Overlay] | None = None):
+    def __init__(self, mode: str = "live", cache_dir: Path | None = None):
         cfg = config.settings()["crawl"]
         self.cfg = cfg
         self.mode = mode                      # live | cache (offline replay)
         self.cache_dir = Path(cache_dir or config.CACHE_DIR)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.overlays = {canonical_url(k): v for k, v in (overlays or {}).items()}
         self.session = requests.Session()
         self.session.headers.update({
             "User-Agent": cfg["user_agent"],
@@ -151,11 +140,7 @@ class Fetcher:
 
     # ------------------------------------------------------------------ main entry
     def fetch(self, url: str) -> FetchResult:
-        res = self._fetch(url)
-        ov = self.overlays.get(canonical_url(url)) or self.overlays.get(canonical_url(res.final_url or url))
-        if ov:
-            res = self._apply_overlay(res, ov)
-        return res
+        return self._fetch(url)
 
     def _fetch(self, url: str) -> FetchResult:
         res = FetchResult(url=url, fetched_at=config.now_iso())
@@ -335,10 +320,7 @@ class Fetcher:
         if key in cache:
             return cache[key]
         out: dict = {"status": None, "error": ""}
-        ov = self.overlays.get(key)
-        if ov and ov.status is not None:
-            out = {"status": ov.status, "error": "simulated"}
-        elif self.mode == "cache":
+        if self.mode == "cache":
             cached = self._cache_read(url)
             out = {"status": int(cached[1].get("status", 0)) if cached else None, "error": "" if cached else "offline"}
         else:
@@ -356,21 +338,6 @@ class Fetcher:
                     break
         cache[key] = out
         return out
-
-    def _apply_overlay(self, res: FetchResult, ov: Overlay) -> FetchResult:
-        res.simulated = True
-        if ov.status is not None:
-            res.status = ov.status
-            res.error = f"SIMULATED HTTP {ov.status}: {ov.note}"
-            res.text = ""
-            return res
-        text = res.text
-        for pattern, repl in ov.replacements:
-            text = re.sub(pattern, repl, text, count=1)
-        res.text = text
-        res.content_hash = sha1(text)[:20]
-        return res
-
 
 def _decode(content: bytes, content_type: str) -> str:
     m = re.search(r"charset=([\w-]+)", content_type or "")

@@ -4,9 +4,10 @@
 data/cache
 data/backups
 data/logs
-data/atlas_demo.db
+data/sample
 tests
-docs
+scripts
+tmp
 __pycache__
 .pytest_cache
 .env

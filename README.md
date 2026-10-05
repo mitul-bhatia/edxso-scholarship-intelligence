@@ -1,153 +1,114 @@
-# Atlas Scholarship Intelligence Crawler
+# Atlas Scholarship Intelligence
 
-An automatic crawler that **discovers → crawls → extracts → verifies → scores → stores → updates** scholarship
-information for Indian students, built for the Atlas Funding repository.
+**Live dashboard:** https://edxso-scholarship-intelligence.vercel.app/
 
-> **Show us what your crawler found.** → `python -m scholarship_intel serve --port 8010` and open <http://127.0.0.1:8010>,
-> or inspect `data/atlas.db` with any SQLite browser.
+**Technical report (3 pages):** [Open the PDF on the live site](https://edxso-scholarship-intelligence.vercel.app/report) or [view the committed copy](output/pdf/Edxso_Scholarship_Intelligence_Technical_Report.pdf)
 
-**Where the data comes from:** `config/seeds.yaml` supplies official portal starting points and search queries. The
-crawler follows links and search leads to provider, government, university, and foundation pages. It downloads those
-pages, extracts only source-supported fields, and writes the result to `data/atlas.db`. The repository does not contain
-a hand-written list of scholarship facts. Open a dashboard record and click a field's evidence button to see the
-official URL and the exact page passage behind it. Search results and aggregators are discovery leads, never proof.
+**Source note:** [Read the methodology](docs/TECHNICAL_NOTE.md)
 
-**Where the UI is:** `python -m scholarship_intel serve --port 8010` starts the FastAPI API and dashboard at
-<http://127.0.0.1:8010>. The `127.0.0.1` address works on your own computer only. The dashboard source is in
-`scholarship_intel/api/static/`; its data comes from the crawler's SQLite database through `/api/*` routes.
+An evidence-grounded crawler for scholarship opportunities available to Indian students. It discovers pages beyond fixed programme URLs, extracts structured facts, checks each claim against a stored official-source snapshot, computes confidence, and maintains a searchable SQLite repository. The Vercel site serves a read-only snapshot. Crawling runs locally or in GitHub Actions.
 
-Design principle: **accuracy over quantity.** Aggregators and search results are only *leads*. A record exists only
-when its facts can be quoted from text fetched from an official source, and the confidence score is *computed from
-evidence* — never produced by a language model.
+![Scholarship dashboard showing real crawl counts and source categories](docs/figures/dashboard_overview.png)
 
-```
- seeds (official hubs · web-search queries · aggregator leads)
-   │ DISCOVER   best-first crawl, link scoring, domain classification, lead → official-page resolution
-   ▼
- CRAWL          robots.txt · rate-limit · retries · TLS fallback · HTML + PDF → text snapshot (stored)
-   ▼
- EXTRACT        rule extractor  +  LLM(s) (Groq / Gemini / Ollama) returning {value, verbatim quote}
-   ▼
- GROUND         quote must be found in the page text (offsets stored) and the value must follow from the quote
-   ▼
- VERIFY/SCORE   9 evidence components, conflict penalty, hard caps  →  VERIFIED (≥95) / REVIEW_REQUIRED
-   ▼
- STORE + DIFF   SQLite; field-level change history (old, new, when, source, evidence); lifecycle status
-   ▼
- DASHBOARD      FastAPI + static SPA: KPIs, search, "Why this score?", evidence trace, change history
-```
+## What is actually in the submitted snapshot
 
-## Quick start
+Snapshot: **5 October 2026**. Run the audit command below for the current counts.
 
-```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements-crawler.txt        # requirements.txt = dashboard only; the crawler extras add Playwright
-python -m playwright install chromium            # free headless browser for JavaScript-only official pages (optional)
-cp .env.example .env          # paste free API keys (all optional – see "LLMs" below)
+| Assignment measure | Observed | Minimum |
+|---|---:|---:|
+| Scholarship records | 47 | 20 |
+| Records linked to fetched, classified official sources | 47 | 15 |
+| Confidence at least 95% | 2 | 10 |
+| Source categories | 5 | 3 |
+| Observed official-source field changes | 0 | 2 |
+| Expired or stale records | 9 | 2 |
 
-python -m scholarship_intel run                 # one crawl (discovery + re-verification of known records)
-python -m scholarship_intel serve --port 8010   # dashboard on http://127.0.0.1:8010 (8000 is often taken by other apps)
-python -m scholarship_intel list                # plain-text table of what was found
-python -m scholarship_intel audit               # actual assignment minimums, with honest pass/fail
-python -m scholarship_intel run                 # run it AGAIN – re-verifies every known record, detects changes / expiry / removal
-python -m scholarship_intel snapshot            # make data/atlas.db one self-contained file (before committing / deploying)
-python -m scholarship_intel demo-changes        # build data/atlas_demo.db: labelled change/expiry demonstration
-ATLAS_DB=data/atlas_demo.db python -m scholarship_intel serve --port 8011
-python -m pytest -q                             # run the test suite
-```
+The two unmet measures are visible rather than filled with artificial data. Hundreds of differences caused by later extraction or validation changes are marked **EXTRACTION CORRECTION**; they are not counted as website changes. A real field change is recorded only when a newly fetched official page differs from the previous snapshot and the grounded field value changes. More scheduled crawls can discover such changes over time, but none are claimed in this snapshot. The 95% gate is deliberately strict: missing official deadlines, incomplete eligibility evidence, or a single extractor keep a record at **REVIEW REQUIRED**.
 
-Useful flags: `--llm off|auto|groq,gemini,ollama` · `--max-pages N` · `--no-search` · `--offline` (replay from the
-on-disk cache) · `--reverify-only` · `--as-of YYYY-MM-DD` (logical "today" for lifecycle logic).
-Repeat automatically: `python -m scholarship_intel schedule --every-hours 24`, or cron / GitHub Actions
-(`.github/workflows/crawl.yml` is included).
+## Inspect the working result
 
-### Credentials and submission
+1. Open the [live dashboard](https://edxso-scholarship-intelligence.vercel.app/). Search or filter the records and open a scholarship.
+2. Inspect **Official source**, **Why this score?**, **Change history**, and a field's **trace** button. The trace connects the stored value to a quote and character offsets in a fetched page.
+3. Review the committed [SQLite database](data/atlas.db) or [CSV and JSON exports](data/sample/). The JSON export includes evidence and score components.
+4. Inspect [crawl runs](https://edxso-scholarship-intelligence.vercel.app/#/runs), [unresolved leads](https://edxso-scholarship-intelligence.vercel.app/#/leads), and [the change feed](https://edxso-scholarship-intelligence.vercel.app/#/changes). Use the audit command to verify the assignment counts directly from SQLite.
 
-No credentials are needed for official websites, search discovery, SQLite, or the dashboard. `GROQ_API_KEY` and
-`GEMINI_API_KEY` are **optional free-tier extractor keys**: create them at the provider links below, paste them into
-your local `.env`, and never commit `.env`. Ollama is another free option that runs on your computer and needs no key.
-These models propose values with quotes; the grounding and scoring code decides what is accepted. The Vercel dashboard
-does not need either LLM key because it only displays the already-crawled snapshot.
-For scheduled crawls to use model cross-checking, add **fresh** `GROQ_API_KEY` and `GEMINI_API_KEY` values as GitHub
-Actions repository secrets. Without them the schedule still runs with rules, and new records cannot pass the
-two-extractor VERIFIED gate. Do not add these keys to Vercel or source control.
+![A real scholarship record with its evidence-based score breakdown](docs/figures/scholarship_detail.png)
 
-Submission package: the GitHub repository, the live dashboard URL (or these local commands), the real
-`data/atlas.db` and `data/sample/` exports, and `docs/TECHNICAL_NOTE.md`. For a short demonstration: run the crawler,
-open a record and its evidence/score breakdown, run it again, then use `demo-changes` to show labelled simulated
-deadline and removal changes through the same pipeline. Keep the real and demonstration databases distinct.
-The exact recording sequence is in `docs/DEMO.md`.
+![Evidence trace from the real Reliance Foundation record](docs/figures/evidence_trace.png)
 
-Vercel runs `app.py` as the FastAPI entry point and reads the committed SQLite snapshot. Its filesystem cannot keep
-crawler writes between requests. The scheduled GitHub workflow runs the crawler, commits the updated database and
-exports, and uploads the database as an artifact; a Git-connected Vercel project deploys the new commit. For a local
-rerun, export and commit the refreshed snapshot to update the public dashboard.
+## How data is obtained
 
-### Deploy the dashboard to Vercel (free)
+~~~text
+Official hubs + topical searches + provider-domain searches
+       ↓
+Ranked discovery frontier; aggregator/search results are leads only
+       ↓
+Official-domain classifier → polite HTML/PDF fetch → stored page text
+       ↓
+Rules + optional Gemini/Groq/Ollama propose values with exact quotes
+       ↓
+Grounding checks quote offsets and whether the quote supports the value
+       ↓
+Nine-component deterministic score + hard caps + lifecycle status
+       ↓
+SQLite records, evidence, rejected claims, crawl runs and field history
+       ↓
+FastAPI dashboard and CSV/JSON exports
+~~~
 
-The crawler runs on your computer (or GitHub Actions); Vercel only *shows* the finished database, read-only.
+Starting points are in [config/seeds.yaml](config/seeds.yaml); source classification rules and provider registry are in [config/domains.yaml](config/domains.yaml). These files contain sources and search terms, not a manually written scholarship dataset. Search snippets and aggregators must resolve to a primary provider, government or institution page before a record is accepted. Missing facts appear as **Not specified**; the model cannot assign confidence.
 
-1. After the final crawl: `python -m scholarship_intel snapshot` (folds the SQLite WAL into `data/atlas.db`, one file) and
-   `python -m scholarship_intel export` (writes `data/sample/`).
-2. Commit **`data/atlas.db`** and `data/sample/` (they are not git-ignored; `.env` and `data/cache/` are).
-3. Push to GitHub, then on vercel.com: **Add New → Project → import the repo**. Framework preset *FastAPI* / *Other*,
-   no build command, **no environment variables** (never add the LLM keys). Vercel finds `app.py` automatically.
-4. Open the Vercel URL – it serves the same dashboard from the committed snapshot. To refresh the public site, re-run the
-   crawler locally, run `snapshot`, commit and push.
+The database stores programme details, benefit, application URL, eligibility, education level, income, age, category, domicile, dates, status, confidence, last verification time and field evidence. Key tables: **scholarships**, **pages**, **field_evidence**, **confidence_breakdown**, **changes**, **status_history**, **rejected_extractions**, **unresolved_leads**, and **crawl_runs**. Schema: [scholarship_intel/db.py](scholarship_intel/db.py).
 
-### LLMs (all free)
+## Run locally
 
-| Provider | Setup | Role |
-|---|---|---|
-| Groq (free tier) | `GROQ_API_KEY` in `.env` | primary extractor (Llama 3.3 70B) |
-| Google Gemini (free tier) | `GEMINI_API_KEY` in `.env` | second independent extractor |
-| Ollama (local) | install Ollama + any model | offline fallback (auto-detected) |
+Python 3.11+ is recommended.
 
-Models are checked against each provider's `/models` endpoint; if a provider retires a listed model or hits a
-rate limit, select another available model or use `--llm gemini` / `--llm off` for that run.
-With no LLM at all the system still runs on the rule extractor, but then nothing can reach VERIFIED
-(a second independent extractor is required for cross-checking — see `docs/CONFIDENCE.md`).
+~~~bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-crawler.txt
+cp .env.example .env
+python -m scholarship_intel run --max-pages 80
+python -m scholarship_intel serve --port 8010
+~~~
 
-## What is where
+Open http://127.0.0.1:8010/. The crawler works with rules alone; optional free-tier Gemini and Groq keys improve independent extraction. Add them to your local **.env** as GEMINI_API_KEY and GROQ_API_KEY. Ollama is an optional local provider. Never commit **.env**. The live Vercel dashboard needs no model key because it only reads the committed database.
 
-| Path | Purpose |
-|---|---|
-| `config/seeds.yaml` | discovery seeds: official hubs + search queries + aggregator-lead queries (**no scholarship records**) |
-| `config/domains.yaml` | source-classification knowledge base: TLD tiers, provider registry, aggregator deny-list |
-| `config/settings.yaml` | thresholds and the 9 confidence weights |
-| `scholarship_intel/discovery/` | frontier crawl, link scoring, web search, domain classifier, lead resolution |
-| `scholarship_intel/extraction/` | rule extractor, parsers (dates/₹/age), LLM clients + prompts, vocabularies |
-| `scholarship_intel/verification/` | **grounding** (anti-hallucination), **scoring** (confidence), **lifecycle** (status) |
-| `scholarship_intel/storage/repo.py` | persistence, evidence rows, change detection |
-| `scholarship_intel/pipeline.py` | orchestrates a run |
-| `scholarship_intel/api/` | FastAPI + dashboard (`static/`) |
-| `scholarship_intel/demo.py` | labelled change/expiry replay on a *copy* of the data |
-| `docs/` | `CONFIDENCE.md`, `TECHNICAL_NOTE.md`, `DEMO.md` |
-| `data/atlas.db` | **the real database produced by the crawler** |
-| `data/atlas_demo.db` | demo copy containing clearly labelled simulated source edits |
-| `data/sample/` | CSV/JSON exports of the real records |
+~~~bash
+python -m scholarship_intel list
+python -m scholarship_intel audit
+python -m scholarship_intel export --out data/sample
+python -m scholarship_intel snapshot
+python -m pytest -q
+~~~
 
-## Database schema (SQLite)
+To rebuild the visual report after refreshing the database, install **requirements-report.txt**, capture current dashboard screenshots, and run **python scripts/build_report.py**. The builder reads the live SQLite snapshot and stops if its fixed narrative counts no longer match.
 
-`scholarships` (canonical record: ~45 columns incl. status, confidence, label) ·
-`field_evidence` (value + verbatim quote + char offsets + page id + extractors; `QUOTE` / `ABSENT` kinds) ·
-`pages` (immutable text snapshots that offsets point into) · `confidence_breakdown` (every point of every score) ·
-`changes` (old/new/detected_at/source/evidence, `simulated` flag) · `status_history` ·
-`rejected_extractions` (everything a model claimed that failed grounding) · `sources` (domain registry) ·
-`discovery_candidates` · `unresolved_leads` · `crawl_runs`. Full DDL: `scholarship_intel/db.py`.
+A subsequent **run** re-fetches known official URLs before discovering new candidates. Use **--reverify-only** for a focused refresh, **--no-search** to crawl seeds and links without search, or **--offline** to inspect the cached pages without network access. **--as-of YYYY-MM-DD** changes the date used for lifecycle calculations, not source evidence.
 
-Trace any value: `scholarships.id → field_evidence(field, quote, char_start, char_end, page_id) → pages.text[char_start:char_end] → official URL`.
+## Updates and hosting
 
-## Honest limitations
+[.github/workflows/crawl.yml](.github/workflows/crawl.yml) schedules a crawl, exports records, checkpoints SQLite, and commits the refreshed snapshot. A Git-connected Vercel deployment then serves the new commit through [app.py](app.py). Vercel is read-only; its request functions do not run the crawler or preserve database writes. To enable model cross-checking in scheduled runs, configure fresh GEMINI_API_KEY and/or GROQ_API_KEY values as **GitHub Actions secrets**. Without them, scheduled extraction uses rules and cannot meet the two-extractor verification gate.
 
-* **JavaScript-only pages** are rendered with Playwright (free headless Chromium) when a plain fetch returns almost no
-  text; without Playwright installed those pages degrade to REVIEW_REQUIRED instead of being guessed.
-* **Scanned-image PDFs** have no text layer; they are skipped/flagged (`needs_ocr`) — no OCR is attempted.
-* Some government hosts are unreachable or bot-blocked from some networks; they are retried next run and escalate to
-  NO_LONGER_VERIFIABLE only after repeated failures.
-* National Scholarship Portal scheme PDFs rarely contain per-cycle deadlines, so many central schemes stay
-  REVIEW_REQUIRED (correctly: the deadline cannot be supported from the official page).
-* Real sources seldom change between two crawls minutes apart; hence the **labelled replay demo** — the real
-  database never receives simulated values.
-* Free LLM tiers are rate limited; the pipeline paces calls, caches unchanged pages by content hash and falls
-  back along the provider chain.
+A local refresh can be published with:
+
+~~~bash
+python -m scholarship_intel run
+python -m scholarship_intel export --out data/sample
+python -m scholarship_intel snapshot
+git add data/atlas.db data/sample
+git commit -m "Refresh crawler snapshot"
+git push
+~~~
+
+## Technical choices and limits
+
+- **Python, requests, BeautifulSoup, pypdf, optional Playwright:** polite fetching with robots checks, per-domain pacing, retries, HTML/PDF parsing, and a browser fallback for JavaScript pages.
+- **Rules plus optional free LLMs:** extraction proposals are checked against exact source passages. A claim with no matching quote or unsupported value is rejected and logged.
+- **SQLite:** inspectable local data, evidence offsets, score components, and append-only history.
+- **FastAPI and plain JavaScript:** lightweight public read-only dashboard and trace view.
+- **Honest lifecycle:** expired deadlines and failed re-verification are distinct from a verified active application window. A temporary network error does not by itself prove removal.
+- **Known gaps:** many official pages omit a current closing date or enough eligibility detail for 95%; scanned PDFs need OCR; free model endpoints can rate limit. The current snapshot has no observed source field changes.
+
+See the [technical report](output/pdf/Edxso_Scholarship_Intelligence_Technical_Report.pdf) and [confidence methodology](docs/CONFIDENCE.md) for the score and evidence rules. This repository includes the working application, source, setup, database, sample exports, dashboard and technical note requested for the assignment.

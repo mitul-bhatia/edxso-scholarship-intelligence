@@ -1,0 +1,2 @@
+# Only needed when rebuilding the submitted PDF from the current SQLite snapshot.
+reportlab>=4.0,<6

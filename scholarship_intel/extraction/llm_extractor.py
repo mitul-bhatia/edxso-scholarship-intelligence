@@ -19,7 +19,7 @@ HARD RULES
    - "quote" MUST be copied character-for-character from the DOCUMENT: one contiguous passage, at most 400 characters, no ellipses, no paraphrase, no added words.
    - If the DOCUMENT does not explicitly state the field, return {"value": null, "quote": null}. A missing income limit is null – never an assumed number.
 3. For text fields ("benefit_text", "eligibility_text", ...) the value must be the same string as the quote (you may use up to 700 characters of quote for list-like sections).
-4. Dates: "YYYY-MM-DD" only when day, month and year are all written. If the DOCUMENT gives several deadlines (e.g. extensions), return the latest one stated for the current/upcoming cycle and quote that sentence.
+4. Dates: "YYYY-MM-DD" only when day, month and year are all written. "closing_date" is ONLY the last day to SUBMIT THE APPLICATION. It is NOT: a referee / reference-letter deadline, a date for bank details or documents after selection, a results / notification / "you will be informed by" date, a test or interview date, or a programme start / end date. If the DOCUMENT announces an extension of the application deadline, use the extended date.
 5. Money: numbers only (rupees); convert lakh = 100000, crore = 10000000. Keep the original currency code.
 6. "is_scholarship_page" = true only if the DOCUMENT is about ONE specific scholarship / fellowship / financial-aid programme that students can apply to. False for lists of many schemes, news, results/merit lists, generic portal pages, circulars unrelated to a programme.
 7. If the DOCUMENT covers several programmes, extract the single programme named in the title and ignore the others.
