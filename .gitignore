@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+*.db-shm
+*.db-wal
+data/logs/
+data/cache/
+data/*.db-journal
+data/atlas_demo.db
+data/atlas_demo.db-*
+.pytest_cache/
+.DS_Store
+.vercel/
+docs/PLAN.md

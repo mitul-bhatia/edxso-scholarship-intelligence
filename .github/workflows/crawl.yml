@@ -1,0 +1,21 @@
+name: scheduled-crawl
+on:
+  schedule:
+    - cron: "30 1 * * *"      # daily 07:00 IST
+  workflow_dispatch: {}
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q
+      - name: Crawl (re-verify known records, then discover new ones)
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python -u -m scholarship_intel run --label "scheduled"
+      - uses: actions/upload-artifact@v4
+        with: { name: atlas-db, path: data/atlas.db }

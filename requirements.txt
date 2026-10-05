@@ -1,0 +1,13 @@
+requests>=2.31
+beautifulsoup4>=4.12
+lxml>=5.0
+pypdf>=4.0
+python-dotenv>=1.0
+pyyaml>=6.0
+rapidfuzz>=3.5
+python-dateutil>=2.9
+pydantic>=2.5
+fastapi>=0.110
+uvicorn[standard]>=0.27
+ddgs>=9.0          # free web-search discovery (no API key)
+pytest>=8.0

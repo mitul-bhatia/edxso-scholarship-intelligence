@@ -1,0 +1,38 @@
+# Tunable parameters. Nothing here is scholarship data.
+verification:
+  verified_min: 95.0          # score needed for VERIFIED
+  expiring_soon_days: 14
+  fuzzy_quote_min: 92         # rapidfuzz partial_ratio needed when a quote is not an exact substring
+  transient_misses_before_unverifiable: 3
+
+# Confidence components – weights must sum to 100. See docs/CONFIDENCE.md
+weights:
+  source_authority: 20
+  live_presence: 10
+  application_url: 8
+  eligibility_support: 14
+  deadline_support: 12
+  benefit_support: 6
+  freshness: 10
+  extractor_agreement: 10
+  traceability: 10
+
+crawl:
+  user_agent: "Mozilla/5.0 (compatible; AtlasScholarshipBot/1.0; research crawler for Atlas Funding prototype)"
+  timeout_seconds: 20
+  connect_timeout_seconds: 6
+  per_domain_delay_seconds: 1.0
+  respect_robots: true
+  max_pages_per_run: 220
+  max_depth: 2
+  max_pdf_pages: 25
+  max_text_chars: 400000
+  min_detail_score: 0.45      # page-kind score above which a page is treated as a scholarship detail candidate
+
+llm:
+  chain: [groq, gemini, ollama]   # order of preference; unavailable providers are skipped
+  temperature: 0
+  max_chars_groq: 15000
+  max_chars_gemini: 40000
+  max_chars_ollama: 9000
+  min_seconds_between_calls: 2.5

@@ -1,0 +1,67 @@
+# DISCOVERY SEEDS – where the crawler starts looking. These are *sources of discovery*, not scholarship records.
+# The crawler scores links, follows promising ones, classifies every domain it meets, and decides on its own
+# which pages are scholarship detail pages. Add hubs/queries freely; nothing else needs to change.
+
+hubs:
+  # Government (ministries, regulators, national portals)
+  - {url: "https://scholarships.gov.in/All-Scholarships", label: "National Scholarship Portal – scheme list", depth: 1}
+  - {url: "https://scholarships.gov.in/nsppmsc/allschemesdepartment", label: "NSP schemes by department", depth: 2}
+  - {url: "https://www.education.gov.in/scholarship-schemes", label: "Ministry of Education scholarship schemes", depth: 2}
+  - {url: "https://www.ugc.gov.in/Home/student_Corner",   label: "UGC student corner",                       depth: 2}
+  - {url: "https://www.aicte-india.org/schemes/students-development-schemes", label: "AICTE student schemes", depth: 2}
+  - {url: "https://www.aicte-india.org/bureaus/scholarships-and-grants",      label: "AICTE scholarships bureau", depth: 1}
+  - {url: "https://online-inspire.gov.in/",                label: "DST INSPIRE",                              depth: 2}
+  - {url: "https://www.cbse.gov.in/cbsenew/scholarship.html", label: "CBSE scholarships",                    depth: 1}
+  - {url: "https://socialjustice.gov.in/schemes",          label: "Ministry of Social Justice schemes",       depth: 1}
+  - {url: "https://tribal.nic.in/",                        label: "Ministry of Tribal Affairs",               depth: 1}
+  - {url: "https://www.minorityaffairs.gov.in/",           label: "Ministry of Minority Affairs",             depth: 1}
+  - {url: "https://cmscholarship.goa.gov.in/SchemesDetails.aspx", label: "Goa government scholarship schemes", depth: 2}
+  - {url: "https://highereducation.nagaland.gov.in/scholarship-schemes/", label: "Nagaland higher education schemes", depth: 2}
+  - {url: "https://www.iith.ac.in/academics/scholarshipFAQ/", label: "IIT Hyderabad scholarship information", depth: 2}
+  # International funders open to Indian students
+  - {url: "https://www.usief.org.in/",                     label: "USIEF (Fulbright-Nehru)",                  depth: 2}
+  - {url: "https://www.chevening.org/scholarships/",       label: "Chevening",                                depth: 1}
+  - {url: "https://cscuk.fcdo.gov.uk/scholarships/",       label: "Commonwealth Scholarships (UK)",           depth: 1}
+  - {url: "https://www.daad.in/en/find-funding/",          label: "DAAD India funding finder",                depth: 1}
+  # Foundations, trusts, corporate CSR
+  - {url: "https://www.inlaksfoundation.org/",             label: "Inlaks Foundation",                        depth: 2}
+  - {url: "https://www.jntataendowment.org/",              label: "J N Tata Endowment",                       depth: 2}
+  - {url: "https://www.reliancefoundation.org/education",  label: "Reliance Foundation education",            depth: 2}
+  - {url: "https://www.adityabirlascholars.net/",          label: "Aditya Birla Scholarship",                 depth: 1}
+  - {url: "https://www.vidyadhan.org/",                    label: "Vidyadhan (Sarojini Damodaran Foundation)", depth: 1}
+  - {url: "https://www.kotakeducation.org/",               label: "Kotak Education Foundation",               depth: 2}
+  - {url: "https://www.sbifoundation.in/focus-area/education", label: "SBI Foundation – education",        depth: 2}
+
+# Web-search discovery. {cur} -> current academic year string, e.g. "2026-27".
+queries:
+  government:
+    - "site:gov.in scholarship scheme for students eligibility last date {cur}"
+    - "site:nic.in scholarship students application guidelines"
+    - "site:gov.in post matric scholarship eligibility income ceiling apply online"
+    - "ministry scholarship scheme for Indian students official notification last date {cur}"
+    - "state government scholarship portal students apply online {cur} site:gov.in"
+  university:
+    - "site:ac.in scholarship for students eligibility how to apply deadline {cur}"
+    - "site:edu.in financial aid scholarship undergraduate apply {cur}"
+    - "IIT scholarship merit-cum-means financial assistance students site:ac.in"
+    - "university merit scholarship Indian students application last date {cur} site:edu.in"
+  corporate_csr:
+    - "CSR scholarship programme Indian undergraduate students apply online {cur}"
+    - "corporate foundation scholarship engineering medical students India eligibility last date {cur}"
+    - "bank foundation scholarship school college students India apply {cur}"
+  foundation_trust:
+    - "trust foundation scholarship for meritorious students India eligibility apply {cur}"
+    - "educational trust scholarship girls students India apply online {cur}"
+    - "endowment scholarship Indian students postgraduate study abroad application {cur}"
+  international:
+    - "scholarship for Indian students to study abroad fully funded apply {cur}"
+    - "fellowship for Indian students masters abroad official application deadline {cur}"
+  aggregator_leads:      # aggregators are used ONLY to learn names; each lead must be resolved to an official page
+    - "site:buddy4study.com scholarship {cur} last date"
+    - "site:buddy4study.com CSR scholarship {cur}"
+    - "site:vidyasaarathi.co.in scholarship {cur}"
+
+crawl_limits:
+  results_per_query: 10
+  leads_per_query: 8
+  max_leads_total: 30

@@ -1,0 +1,112 @@
+# Source-classification knowledge base.
+# This file describes *who publishes* things (authority), never what a scholarship says.
+# Anything not matched here is classified UNKNOWN (tier T4) and cannot reach VERIFIED
+# unless the provider-name <-> domain heuristic upgrades it (see verification/official.py).
+
+# --- Tier by domain suffix -------------------------------------------------------------
+suffix_rules:
+  # suffix, source_type, tier, reason
+  - [".gov.in",   GOVERNMENT, T1, "Indian government domain (.gov.in)"]
+  - [".nic.in",   GOVERNMENT, T1, "National Informatics Centre government domain (.nic.in)"]
+  - [".res.in",   GOVERNMENT, T1, "Indian research-council domain (.res.in)"]
+  - [".ac.in",    UNIVERSITY, T2, "Indian academic institution domain (.ac.in)"]
+  - [".edu.in",   UNIVERSITY, T2, "Indian educational institution domain (.edu.in)"]
+  - [".ernet.in", UNIVERSITY, T2, "ERNET academic domain"]
+  - [".gov",      INTERNATIONAL, T1, "Foreign government domain (.gov)"]
+  - [".gov.uk",   INTERNATIONAL, T1, "UK government domain"]
+  - [".gov.au",   INTERNATIONAL, T1, "Australian government domain"]
+  - [".gc.ca",    INTERNATIONAL, T1, "Canadian government domain"]
+  - [".edu",      INTERNATIONAL, T2, "US academic institution domain (.edu)"]
+  - [".ac.uk",    INTERNATIONAL, T2, "UK academic institution domain"]
+  - [".edu.au",   INTERNATIONAL, T2, "Australian academic institution domain"]
+
+# Domains that are *banks/PSUs/regulated bodies* on .in/.com TLDs but are official publishers.
+# (kept deliberately short; the heuristic handles the long tail)
+known_providers:
+  - {domain: scholarships.gov.in,        name: "National Scholarship Portal (Govt. of India)", type: GOVERNMENT,    tier: T1}
+  - {domain: reliancefoundation.org,     name: "Reliance Foundation",                          type: CORPORATE_CSR, tier: T3}
+  - {domain: tatatrusts.org,             name: "Tata Trusts",                                  type: NGO_TRUST,     tier: T3}
+  - {domain: jntataendowment.org,        name: "J N Tata Endowment",                           type: NGO_TRUST,     tier: T3}
+  - {domain: tatacapital.com,            name: "Tata Capital",                                 type: CORPORATE_CSR, tier: T3}
+  - {domain: hdfcbank.com,               name: "HDFC Bank",                                    type: CORPORATE_CSR, tier: T3}
+  - {domain: sbifoundation.in,           name: "SBI Foundation",                               type: CORPORATE_CSR, tier: T3}
+  - {domain: adityabirlascholars.net,    name: "Aditya Birla Group",                           type: CORPORATE_CSR, tier: T3}
+  - {domain: kotakeducation.org,         name: "Kotak Education Foundation",                   type: CORPORATE_CSR, tier: T3}
+  - {domain: azimpremjifoundation.org,   name: "Azim Premji Foundation",                       type: NGO_TRUST,     tier: T3}
+  - {domain: inlaksfoundation.org,       name: "Inlaks Shivdasani Foundation",                 type: NGO_TRUST,     tier: T3}
+  - {domain: nsfoundation.co.in,         name: "Narotam Sekhsaria Foundation",                 type: NGO_TRUST,     tier: T3}
+  - {domain: vidyadhan.org,              name: "Sarojini Damodaran Foundation (Vidyadhan)",    type: NGO_TRUST,     tier: T3}
+  - {domain: chevening.org,              name: "Chevening (UK FCDO)",                          type: INTERNATIONAL, tier: T3}
+  - {domain: usief.org.in,               name: "United States-India Educational Foundation",   type: INTERNATIONAL, tier: T3}
+  - {domain: daad.in,                    name: "DAAD India",                                   type: INTERNATIONAL, tier: T3}
+  - {domain: daad.de,                    name: "DAAD",                                         type: INTERNATIONAL, tier: T3}
+  - {domain: cscuk.fcdo.gov.uk,          name: "Commonwealth Scholarship Commission (UK)",     type: INTERNATIONAL, tier: T1}
+  - {domain: britishcouncil.in,          name: "British Council India",                        type: INTERNATIONAL, tier: T3}
+  - {domain: aicte-india.org,            name: "All India Council for Technical Education", type: GOVERNMENT,    tier: T1}
+  - {domain: ugc.ac.in,                  name: "University Grants Commission",                 type: GOVERNMENT,    tier: T1}
+  - {domain: nta.ac.in,                  name: "National Testing Agency",                      type: GOVERNMENT,    tier: T1}
+  - {domain: studyinindia.gov.in,        name: "Study in India (Govt. of India)",              type: GOVERNMENT,    tier: T1}
+
+# --- Aggregators, blogs, news: DISCOVERY ONLY. Never evidence, never "official". -----------
+aggregators:
+  - buddy4study.com
+  - vidyasaarathi.co.in
+  - scholarshipsinindia.com
+  - scholarships.net.in
+  - scholarshipportal.com
+  - scholars4dev.com
+  - opportunitydesk.org
+  - internationalscholarships.com
+  - shiksha.com
+  - collegedunia.com
+  - careers360.com
+  - leverageedu.com
+  - jagranjosh.com
+  - indiatoday.in
+  - timesofindia.indiatimes.com
+  - thehindu.com
+  - ndtv.com
+  - hindustantimes.com
+  - indianexpress.com
+  - economictimes.indiatimes.com
+  - freshersworld.com
+  - sarkariresult.com
+  - govtjobsblog.in
+  - mygov.in
+  - wikipedia.org
+  - quora.com
+  - reddit.com
+  - medium.com
+  - youtube.com
+  - facebook.com
+  - instagram.com
+  - twitter.com
+  - x.com
+  - linkedin.com
+  - t.me
+  - blogspot.com
+  - wordpress.com
+  - scholarshipsads.com
+  - scholarshipdesk.com
+  - studyabroad.shiksha.com
+  - edufever.com
+  - india.gov.in            # a directory; points to primary sources but is not itself the scheme owner
+  - myscheme.gov.in         # government scheme directory (summaries); the owning ministry's own page is the primary source
+
+# Never fetch these at all (login walls, trackers, app stores, file hosts)
+deny_fetch:
+  - play.google.com
+  - apps.apple.com
+  - google.com
+  - goo.gl
+  - bit.ly
+  - docs.google.com
+  - forms.gle
+  - drive.google.com
+
+# Words that suggest an organisation type when classifying heuristically
+name_hints:
+  NGO_TRUST: ["foundation", "trust", "society", "charitable", "endowment", "ngo", "samiti", "sansthan"]
+  CORPORATE_CSR: ["bank", "limited", "ltd", "industries", "corporation", "corp", "capital", "finance", "csr", "group", "motors", "steel", "power", "oil", "insurance", "technologies", "infosys", "wipro", "tata", "birla", "mahindra", "bajaj", "reliance"]
+  UNIVERSITY: ["university", "institute of technology", "iit", "iim", "nit", "iiser", "college"]
+  GOVERNMENT: ["ministry", "department", "commission", "government", "council", "board", "directorate"]
