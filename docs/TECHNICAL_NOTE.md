@@ -1,31 +1,86 @@
-# Scholarship Intelligence Crawler — technical note
+# Scholarship Intelligence Crawler — Technical Note
 
 ## 1. Architecture and technology
 
-The Python pipeline runs `Discoverer → Fetcher → extractors → grounding → scoring/lifecycle → SQLite`. A FastAPI application reads the resulting database and serves the dashboard and inspection API. The crawler is separate from the web process: `python -m scholarship_intel run` updates the database; `python -m scholarship_intel serve` shows its current contents. GitHub Actions can invoke a scheduled run and publish the database as a workflow artifact. The Vercel deployment serves a committed, read-only SQLite snapshot; updates require a new snapshot commit and deployment. This separation is necessary because Vercel functions do not provide durable filesystem writes.
+`Discoverer → Fetcher → extractors → grounding → relevance gates → scoring/lifecycle → SQLite → FastAPI dashboard`.
+`python -m scholarship_intel run` updates the database; `serve` displays it. Each run first **re-verifies every known
+record against its official URL**, then discovers new candidates. A GitHub Actions schedule can repeat the crawl and
+commit a snapshot; Vercel serves that committed SQLite file read-only (`snapshot` makes it one self-contained file).
 
-The stack is Python, Requests, Beautiful Soup, pypdf, SQLite, FastAPI, and plain JavaScript. It needs no paid service. The rule extractor works without credentials. Optional Groq, Gemini, or locally installed Ollama models propose structured fields, each with a source quote. A language model is never permitted to assign confidence or status.
+Stack: Python 3.11, Requests, BeautifulSoup/lxml, pypdf, **Playwright** (free headless Chromium, used only when a plain
+fetch returns almost no text — e.g. the Reliance Foundation portal is a JavaScript app), SQLite, FastAPI, plain JS.
+Free LLM tiers: Groq (`openai/gpt-oss-120b`, picked from the provider's `/models` list), Gemini (`gemini-3.1-flash-lite`),
+local Ollama as an offline fallback. **LLMs only propose `{value, verbatim quote}`; they never assign confidence or status.**
+No paid service is used.
 
-## 2. Discovery, extraction, and authenticity
+## 2. Discovery (not a URL → scraper list)
 
-`config/seeds.yaml` contains official hub URLs and topical search queries, not scholarship records. Search results and aggregator pages enter a lead queue. The discoverer scores candidate links, follows promising pages, and attempts to resolve aggregator leads to a provider or government page. The domain classifier uses government and academic suffixes, a small provider-domain registry, an aggregator deny-list, and a provider-to-domain ownership check. Unresolved and non-official leads are logged, but not stored as scholarships.
+`config/seeds.yaml` holds official hubs (NSP, UGC, AICTE, DST, Chevening, Commonwealth, USIEF, foundations…), topical and
+deadline-oriented search queries — no scholarship records. On top of that, discovery is **registry-driven**: for every
+known provider domain it runs a `site:` query for scholarship/deadline pages, so programme pages are found without
+per-page seeds. Aggregator pages and search snippets are only *leads*: each lead must resolve to an official page or it is
+logged (`unresolved_leads`, 61 so far) and never stored. A best-first frontier scores links (keywords, row context, file
+type), enforces per-origin budgets, and a per-domain circuit breaker stops dead hosts from stalling a run.
 
-The fetcher observes `robots.txt`, limits request rate by domain, retries transient failures, and converts HTML or text-layer PDFs into stored text snapshots. The rule extractor identifies names, dates, amounts, requirements, and links. Optional LLM extraction returns `{value, quote}` claims. Grounding looks up the quote in the fetched official text, records character offsets, and checks that dates, amounts, categories, and URLs follow from the quote. Rejected claims are retained in `rejected_extractions` for audit. Missing fields are displayed as **Not specified**. Scanned PDFs and unreadable JavaScript pages stay unverified.
+**Source classification** (every domain → type + tier + reason, stored in `sources`, 31 domains so far): government TLDs
+(T1, 1.00); academic TLDs (T2, 0.95) — **kept only if the extracted provider actually owns the domain**, which rejects
+coaching-site articles on `.ac.in`; a curated registry of verified provider domains (T3, 0.95); provider-name↔domain
+match with self-identification (T3h, 0.80); unknown (T4) and aggregators (T5) can never be official.
+**Relevance gates** reject listing pages (≥8 separate closing-date statements), news/press-release pages, foreign-only
+programmes with no sign they are open to Indian students, and junk titles ("Q1. What are the eligibility criteria?").
+The same programme found on two official domains is merged into one record.
 
-The trace path is `scholarships → field_evidence → pages → official_url`. Each evidence row has the extracted value, source quote, source URL, page ID, offsets, extractor name, and verification timestamp. A reviewer can open a scholarship in the dashboard and select a field's evidence to see its context.
+## 3. Extraction
 
-## 3. Verification and confidence
+Text is taken from HTML or PDF (scanned PDFs are flagged, not guessed). A deterministic **rule extractor** (dates, ₹/lakh
+amounts, income/age limits, categories, levels, sections such as *Eligibility* / *Documents*) and up to two **LLMs**
+(strict JSON, `null` when absent, quote ≤ 400 chars) run independently. If the main page has no closing date, a
+**second-hop step** reads same-domain FAQ/timeline/notice pages — a date is accepted only if that page names the
+scholarship and falls in the current cycle, and the evidence then points at that page.
 
-The score is a deterministic sum of nine components, configured in `config/settings.yaml`: source authority (20), live presence (10), application URL (8), eligibility support (14), deadline support (12), benefit support (6), freshness (10), extractor agreement (10), and traceability (10). Each component's points and reason are saved in `confidence_breakdown`. Conflicting critical fields incur a penalty. Hard caps prevent a non-official source, unreadable page, missing name, absent critical fields, or single extractor from reaching VERIFIED. `VERIFIED` requires a final score of at least 95%; all other records are `REVIEW_REQUIRED`. The detailed calculation is in `docs/CONFIDENCE.md`.
+## 4. Verification and anti-hallucination
 
-The confidence label and lifecycle status answer different questions. A record can be supported by a primary source while its application window is expired. Lifecycle logic uses the grounded closing date, an official rolling-window statement, discontinuation text, HTTP 404/410, and consecutive fetch failures to decide `ACTIVE`, `EXPIRING_SOON`, `EXPIRED`, `REVIEW_REQUIRED`, or `NO_LONGER_VERIFIABLE`.
+A claim becomes a fact only if (1) its quote is **found verbatim** in the stored page text (fuzzy ≥ 92 only for PDF
+line-wrap noise), with character offsets saved, and (2) the value **follows from the quote**: dates parse to the same
+date, amounts/income/age figures appear in it, enum members (SC, ST, OBC, PwD…) are justified by its wording, URLs are
+among the page's links, and text fields must be *about* their field and not first-person narrative (this caught a scholar
+testimonial filed as "selection process"). Everything else is discarded and logged in `rejected_extractions`
+(498 audit rows). "Not specified" is itself checked: it is credited only if no wording in the document hints at the
+field. Trace chain: `scholarships → field_evidence(quote, offsets) → pages.text → official URL`.
 
-## 4. Repeated runs and change detection
+## 5. Confidence score (deterministic; `docs/CONFIDENCE.md`)
 
-Every run first revisits known official URLs, then discovers new candidates. Unchanged content reuses stored facts, while changed content is extracted and verified again. Field-level differences are written to `changes` with old and new values, detection time, official URL, old and new evidence, and run ID. If a code or extractor revision changes a value while the source text hash stays the same, the history labels it an **extraction correction**, not a source change. Status changes are also retained. The old value is not silently overwritten. `crawl_runs` records the mode and statistics for each run.
+Nine components (weights): source authority 20 · live presence 10 · application URL 8 · eligibility support 14 ·
+deadline support 12 · benefit support 6 · freshness 10 · extractor agreement 10 · traceability 10. Every point and its reason
+is stored (`confidence_breakdown`) and shown under "Why this score?". Then: −3 per unresolved conflict on a critical field;
+**caps** (non-official source ≤ 59, name not on page ≤ 40, page unreadable ≤ 50); **gates** (< 2 independent extractors ≤ 90;
+a critical field without grounded evidence — name, provider, benefit, eligibility, closing date *or* open-window statement,
+level — ≤ 94). `VERIFIED` ⇔ final score ≥ 95. Calibration choices, stated openly: a dated deadline earns 1.0 but "applications
+are now open" without a date only 0.7; registry provider domains earn the same authority as academic domains (0.95).
 
-Real sites may not change during a short assessment. `python -m scholarship_intel demo-changes` copies the real database, replays cached official pages with explicitly **simulated** source edits, and runs the same extraction, scoring, diff, and lifecycle code. The demo database and dashboard label those changes. The production database never receives simulated facts. This proves the mechanism without presenting fabricated changes as real-world observations.
+## 6. Change detection and lifecycle
 
-## 5. Limits and inspection
+Page text is hashed; unchanged pages reuse stored facts (and a run never replaces a stored two-extractor result with a
+weaker one when a provider is down). Field-level differences go to `changes` with old value, new value, detection time,
+source URL and old/new evidence — **never overwritten**. If the source hash is unchanged but extractor output differs, it is
+labelled `EXTRACTION_CORRECTION`, not a source change. Statuses: `ACTIVE`, `EXPIRING_SOON` (≤ 14 days), `EXPIRED`,
+`REVIEW_REQUIRED`, `NO_LONGER_VERIFIABLE` (404/410, name gone, or repeated failures); every transition is in `status_history`.
+Real official pages did not change during the hours between my crawls, so change handling is demonstrated on a **separate
+copy** (`demo-changes` → `data/atlas_demo.db`): cached official pages are replayed with a few explicitly **SIMULATED** edits
+(deadline extended or moved into the past, an amount revised, pages turned into 404) through the unchanged pipeline, plus
+records re-found as NEW. The real database contains no simulated value; unit tests cover the same chain.
 
-Page access, rate limits, unsupported PDF scans, and sparse official deadlines constrain the number of records and high scores. The system leaves unsupported fields empty rather than completing them from search snippets. Inspect the actual output with `python -m scholarship_intel stats`, the dashboard, `data/atlas.db`, or the CSV/JSON export in `data/sample/`. Run `python -m scholarship_intel run` twice to observe live re-verification; use the labelled replay to inspect deterministic change handling immediately.
+## 7. What the crawler produced — and where it falls short
+
+Real database (`data/atlas.db`, 14 crawl runs): **54 records, all from official sources**: Government 19, International 16,
+NGO/Trust 14, Corporate CSR 3, University 2. Lifecycle: 7 ACTIVE, 4 EXPIRING_SOON, 12 EXPIRED, 3 NO_LONGER_VERIFIABLE,
+28 REVIEW_REQUIRED. Average confidence 84.5%.
+
+**Only 3 records reach VERIFIED (≥ 95%): two Reliance Foundation scholarships and the FFE–Info Edge scholarship. The brief's
+minimum of 10 is not met.** Most official scheme pages (NSP/AICTE/UGC guidelines) publish no dated deadline, so they correctly
+stay REVIEW_REQUIRED; many corporate programmes apply through third-party portals or JavaScript pages; and free-tier
+Groq/Gemini limits ("high demand", 20-minute rate limits) sometimes leave only one extractor, which caps a record at 90. I did not
+lower the threshold to reach the count. No real source-field changes were observed in the crawl window; lifecycle changes
+(ACTIVE → EXPIRING_SOON/EXPIRED, removals) are real, field-change examples come from the labelled demo. Other limits: scanned
+PDFs are unreadable (no OCR), some NIC-hosted sites time out from some networks, and extractor choices on multi-line lists
+can still be imperfect — which is why every field carries its quote for human review.

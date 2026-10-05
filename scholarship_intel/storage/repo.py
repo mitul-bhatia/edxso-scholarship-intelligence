@@ -225,7 +225,8 @@ class Repo:
                     ctype, note = "FIELD_CHANGED", "CHANGE DETECTED"
                 if same_source_text:
                     note = "EXTRACTION_CORRECTION: official page content is unchanged; extractor output or validation changed"
-                self._change(sid, run_id, f, ctype, old, new, rec.official_url, old_q, new_q, simulated, note)
+                self._change(sid, run_id, f, ctype, old, new, (rec.facts[ev_field].source_url if ev_field in rec.facts else None) or rec.official_url,
+                             old_q, new_q, simulated, note)
                 changes.append({"field": f, "type": ctype, "old": old, "new": new})
                 changed_any = True
             if existing["status"] != rec.status.status:
@@ -258,8 +259,8 @@ class Repo:
             self.conn.execute(
                 """INSERT INTO field_evidence(scholarship_id,run_id,field,value,quote,page_id,source_url,char_start,char_end,match_score,
                    extractor,evidence_kind,verified_at,is_current) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1)""",
-                (sid, run_id, f, json.dumps(g.value, default=str) if not isinstance(g.value, str) else g.value, g.quote, rec.primary_page_id,
-                 rec.official_url, g.start, g.end, g.match_score,
+                (sid, run_id, f, json.dumps(g.value, default=str) if not isinstance(g.value, str) else g.value, g.quote,
+                 g.page_id or rec.primary_page_id, g.source_url or rec.official_url, g.start, g.end, g.match_score,
                  ",".join([g.extractor] + g.agreed_by), "QUOTE", now))
         for f, (verified, note) in rec.absent.items():
             if f in rec.facts:
@@ -284,6 +285,40 @@ class Repo:
             self.conn.execute(
                 "INSERT INTO confidence_breakdown(scholarship_id,run_id,component,weight,score,points,detail,created_at) VALUES (?,?,?,?,?,?,?,?)",
                 (sid, run_id, name, 0, 0, pts, det, now))
+
+    def dedupe(self, run_id: int) -> list[tuple[int, int]]:
+        """Same programme published on two official domains (e.g. aicte.gov.in and aicte-india.org) must be ONE record.
+        Keeps the higher-confidence copy, retires the other with a logged reason. Returns [(retired_id, kept_id)]."""
+        recs = [dict(r) for r in self.conn.execute("SELECT id,name,provider,confidence,source_tier FROM scholarships ORDER BY id")]
+        gone: set[int] = set()
+        out: list[tuple[int, int]] = []
+        for i, a in enumerate(recs):
+            for b in recs[i + 1:]:
+                if a["id"] in gone or b["id"] in gone:
+                    continue
+                if fuzz.ratio(name_key(a["name"]), name_key(b["name"])) < 95:
+                    continue
+                pa, pb = fold(a["provider"] or ""), fold(b["provider"] or "")
+                same_provider = (not pa or not pb) or fuzz.token_set_ratio(pa, pb) >= 70
+                both_gov = a["source_tier"] == "T1" and b["source_tier"] == "T1"
+                if not (same_provider or both_gov):
+                    continue
+                keep, lose = (a, b) if (a["confidence"] or 0) >= (b["confidence"] or 0) else (b, a)
+                self.retire(lose["id"], run_id, f"duplicate of #{keep['id']} (same programme published on another official page)")
+                gone.add(lose["id"])
+                out.append((lose["id"], keep["id"]))
+        return out
+
+    def retire(self, sid: int, run_id: int, reason: str) -> None:
+        """Remove a record that fails a relevance gate on re-verification (created by an earlier mistake). The reason is kept."""
+        row = self.conn.execute("SELECT key,name,primary_page_id FROM scholarships WHERE id=?", (sid,)).fetchone()
+        if row is None:
+            return
+        self.conn.execute(
+            "INSERT INTO rejected_extractions(run_id,scholarship_key,scholarship_name,page_id,field,proposed_value,proposed_quote,reason,extractor,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (run_id, row["key"], row["name"], row["primary_page_id"], "*record*", row["name"], "", f"RETIRED on re-verification: {reason}", "relevance-gate", config.now_iso()))
+        self.conn.execute("DELETE FROM scholarships WHERE id=?", (sid,))
+        self.conn.commit()
 
     # ------------------------------------------------------------------ not-seen bookkeeping
     def mark_missing(self, sid: int, run_id: int, status: Status, source_url: str, simulated: bool = False) -> None:

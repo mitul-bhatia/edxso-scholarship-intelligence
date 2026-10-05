@@ -218,6 +218,7 @@ class LLMRouter:
                     if p.available():
                         self.providers.append(p)
         self._last = 0.0
+        self._cooldown_until: dict[str, float] = {}
         self.calls = 0
         self.failures: list[str] = []
 
@@ -225,7 +226,20 @@ class LLMRouter:
         return ", ".join(p.label for p in self.providers) or "none (rule-based extraction only)"
 
     def providers_for_extraction(self, n: int = 2) -> list[Provider]:
-        return self.providers[:n]
+        ready = [p for p in self.providers if time.time() >= self._cooldown_until.get(p.name, 0)]
+        # The local model is a fallback when no cloud extractor is available;
+        # a free-tier cooldown should not silently turn every page into a
+        # potentially minutes-long local inference call.
+        cloud = [p for p in ready if p.name != "ollama"]
+        return (cloud or ready)[:n]
+
+    def seconds_until_ready(self, max_wait: float = 75.0) -> float | None:
+        """Shortest wait (<= max_wait) until a cooled-down cloud provider is usable again, else None (nothing worth waiting for)."""
+        now = time.time()
+        waits = [self._cooldown_until[p.name] - now for p in self.providers
+                 if p.name != "ollama" and self._cooldown_until.get(p.name, 0) > now]
+        waits = [w for w in waits if w <= max_wait]
+        return min(waits) if waits else None
 
     def call(self, provider: Provider, system: str, user: str, max_tokens: int = 3000) -> dict:
         wait = self._last + self.min_gap - time.time()
@@ -241,9 +255,16 @@ class LLMRouter:
             except LLMRateLimited as exc:
                 last_exc = exc
                 m = re.search(r"retry-after=(\d+(?:\.\d+)?)", str(exc))
-                time.sleep(min(float(m.group(1)) + 1 if m else 12 * (attempt + 1), 45))
+                delay = float(m.group(1)) if m else 60.0
+                if delay > 15 or attempt == 2:
+                    self._cooldown_until[provider.name] = time.time() + delay
+                    break
+                time.sleep(delay + 1)
             except LLMError as exc:
                 last_exc = exc
+                if re.search(r"HTTP (502|503|504)", str(exc)):
+                    self._cooldown_until[provider.name] = time.time() + 60
+                    break
                 if "parseable JSON" not in str(exc):
                     break
                 user = user + "\n\nReminder: respond with ONE valid JSON object only."

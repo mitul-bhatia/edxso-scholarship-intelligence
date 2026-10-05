@@ -48,6 +48,7 @@ class FetchResult:
     from_cache: bool = False
     simulated: bool = False
     is_pdf: bool = False
+    rendered: bool = False            # text obtained by executing JavaScript (Playwright)
 
     @property
     def ok(self) -> bool:
@@ -86,6 +87,9 @@ class Fetcher:
             "Accept-Language": "en-IN,en;q=0.8",
         })
         self._last_hit: dict[str, float] = {}
+        self._pw = None
+        self._browser = None
+        self._js_count = 0
         self._dead: dict[str, int] = {}          # registered domain -> consecutive connect failures (circuit breaker)
         self.connect_timeout = float(cfg.get("connect_timeout_seconds", 6))
         self._robots: dict[str, urllib.robotparser.RobotFileParser | None] = {}
@@ -209,7 +213,8 @@ class Fetcher:
                     self._cache_write(url, content, meta)
                     if canonical_url(r.url) != canonical_url(url):
                         self._cache_write(r.url, content, meta)
-                return self._build(res, content, meta)
+                built = self._build(res, content, meta)
+                return self._maybe_render(built, url, meta)
             except requests.RequestException as exc:
                 last_err = f"{type(exc).__name__}: {str(exc)[:160]}"
                 if isinstance(exc, (requests.ConnectTimeout, requests.ConnectionError)):
@@ -223,6 +228,70 @@ class Fetcher:
         self.stats["errors"] += 1
         res.status, res.error = 0, last_err
         return res
+
+    # ------------------------------------------------------------------ optional JavaScript rendering (Playwright, free)
+    def _maybe_render(self, res: FetchResult, url: str, meta: dict) -> FetchResult:
+        cfg = self.cfg
+        if (not cfg.get("js_render", True) or self.mode != "live" or res.is_pdf or not (200 <= res.status < 300)
+                or "html" not in res.content_type or len(res.text) >= int(cfg.get("js_render_min_chars", 400))
+                or self._js_count >= int(cfg.get("max_js_renders", 40))):
+            return res
+        html = self._render_js(res.final_url or url)
+        if not html:
+            return res
+        before = (res.text, res.title, res.headings, res.links, res.content_hash)
+        raw = html.encode("utf-8", "ignore")
+        self._build(res, raw, {**meta, "content_type": "text/html; charset=utf-8"})
+        if len(res.text) <= len(before[0]) * 1.5:
+            res.text, res.title, res.headings, res.links, res.content_hash = before      # rendering did not help
+            return res
+        res.rendered = True
+        self.stats["js_rendered"] = self.stats.get("js_rendered", 0) + 1
+        self._cache_write(url, raw, {**meta, "content_type": "text/html; charset=utf-8", "rendered": True})
+        if canonical_url(res.final_url or url) != canonical_url(url):
+            self._cache_write(res.final_url, raw, {**meta, "content_type": "text/html; charset=utf-8", "rendered": True})
+        return res
+
+    def _render_js(self, url: str) -> str | None:
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError:
+            self.cfg["js_render"] = False
+            return None
+        if self._pw is None:
+            try:
+                self._pw = sync_playwright().start()
+                self._browser = self._pw.chromium.launch()
+            except Exception:                       # browser binary missing: degrade gracefully
+                self._pw = None
+                self.cfg["js_render"] = False
+                return None
+        self._js_count += 1
+        ctx = None
+        try:
+            ctx = self._browser.new_context(user_agent=self.cfg["user_agent"], ignore_https_errors=True)
+            page = ctx.new_page()
+            page.goto(url, wait_until="networkidle", timeout=25000)
+            page.wait_for_timeout(1200)
+            return page.content()
+        except Exception:
+            return None
+        finally:
+            if ctx is not None:
+                try:
+                    ctx.close()
+                except Exception:
+                    pass
+
+    def close(self) -> None:
+        try:
+            if self._browser is not None:
+                self._browser.close()
+            if self._pw is not None:
+                self._pw.stop()
+        except Exception:
+            pass
+        self._pw = self._browser = None
 
     def _build(self, res: FetchResult, content: bytes, meta: dict) -> FetchResult:
         res.status = int(meta.get("status", 0))

@@ -1,0 +1,12 @@
+.venv
+.git
+.github
+data/cache
+data/backups
+data/logs
+data/atlas_demo.db
+tests
+docs
+__pycache__
+.pytest_cache
+.env

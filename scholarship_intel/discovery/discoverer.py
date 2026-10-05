@@ -127,7 +127,23 @@ class Discoverer:
                     prio = 1.2 if sc.official else 0.7
                     if self.enqueue(Cand(h.url, f"search:{cat}", prio, 1 if sc.official else 0, f"search:{cat}", anchor=h.title)):
                         taken += 1
+        self._provider_site_queries(cur, per_q)
         self._resolve_leads()
+
+    def _provider_site_queries(self, cur: str, per_q: int) -> None:
+        """Registry-driven discovery: for every known non-government provider domain, ask the search engine for that
+        domain's scholarship / deadline pages. New programme pages on trusted domains are found without any per-page seed."""
+        for kp in config.domain_config().get("known_providers", []):
+            if kp["type"] not in ("CORPORATE_CSR", "NGO_TRUST", "INTERNATIONAL"):
+                continue
+            query = f"site:{kp['domain']} scholarship application last date {cur}"
+            hits = web_search(query, per_q)
+            n = 0
+            for h in hits:
+                sc = classify_url(h.url)
+                if sc.official and not is_denied(h.url) and self.enqueue(Cand(h.url, "search:provider-site", 1.25, 1, f"provider:{kp['domain']}", anchor=h.title)):
+                    n += 1
+            self.log(f"  provider-site[{kp['domain']}] -> {len(hits)} results, {n} queued")
 
     def _resolve_leads(self) -> None:
         """Aggregator leads -> official pages. Aggregator content itself is never used as evidence."""

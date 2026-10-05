@@ -14,7 +14,8 @@ from .. import config
 from ..textproc import fold_text
 from ..util import host_of, registered_domain
 
-TIER_AUTHORITY = {"T1": 1.00, "T2": 0.95, "T3": 0.85, "T3h": 0.80, "T4": 0.40, "T5": 0.0}
+# T3 = curated registry of manually verified provider domains (same standing as an academic domain); T3h = inferred by name match
+TIER_AUTHORITY = {"T1": 1.00, "T2": 0.95, "T3": 0.95, "T3h": 0.80, "T4": 0.40, "T5": 0.0}
 OFFICIAL_TIERS = {"T1", "T2", "T3", "T3h"}
 
 

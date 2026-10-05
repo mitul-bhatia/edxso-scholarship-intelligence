@@ -99,6 +99,8 @@ def _support(field_name: str, inp: ScoreInput) -> tuple[float, str]:
     g = inp.facts.get(field_name)
     if g is not None:
         ag = inp.agreement.get(field_name)
+        if field_name in V.TEXT_FIELDS and ag is not None and ag < 0.999:
+            ag = None          # verbatim text: two extractors quoting different valid passages is not a disagreement
         if ag is None:
             return (1.0 if inp.n_extractors <= 1 else 0.92), "grounded in quote (single extractor addressed it)"
         if ag >= 0.999:
@@ -186,7 +188,11 @@ def compute(inp: ScoreInput) -> ScoreResult:
         sc, why = _support("closing_date", inp)
         det = f"closing date {inp.facts['closing_date'].value}: {why}"
     elif "deadline_note" in inp.facts:
-        sc, det = 0.9, "no fixed date, but a rolling/year-round application statement is quoted"
+        kind = V.states_open_window(inp.facts["deadline_note"].quote)
+        if kind == "rolling":
+            sc, det = 0.9, "no fixed date, but a rolling/year-round application statement is quoted"
+        else:
+            sc, det = 0.7, "page states applications are currently open, but publishes no closing date"
     else:
         verified, note = inp.absent.get("closing_date", (True, ""))
         sc = 0.45 if verified else 0.1
@@ -198,7 +204,7 @@ def compute(inp: ScoreInput) -> ScoreResult:
         sc, why = _support("amount", inp)
         det = f"amount grounded: {why}"
     elif "benefit_text" in inp.facts:
-        sc, det = 0.7, "benefit described in words (no numeric amount grounded)"
+        sc, det = 0.9, "benefit stated in words and quoted from the source (no numeric amount to ground)"
     else:
         verified, note = inp.absent.get("amount", (True, ""))
         sc = 0.3 if verified else 0.1

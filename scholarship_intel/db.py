@@ -112,8 +112,13 @@ CREATE TABLE IF NOT EXISTS unresolved_leads (
 """
 
 
-def connect(path: Path | str | None = None) -> sqlite3.Connection:
+def connect(path: Path | str | None = None, readonly: bool = False) -> sqlite3.Connection:
+    """Open the database. `readonly=True` never writes (no schema/WAL changes) – used by stats/list/audit/export."""
     p = Path(path) if path else db_path()
+    if readonly:
+        conn = sqlite3.connect(f"{p.resolve().as_uri()}?mode=ro", uri=True, timeout=30)
+        conn.row_factory = sqlite3.Row
+        return conn
     p.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(p, timeout=30)
     conn.row_factory = sqlite3.Row

@@ -33,9 +33,10 @@ def _validate_value(field: str, value, quote: str) -> tuple[object | None, str]:
             return str(value).strip(), ""
         return None, "value not contained in quote"
     if field == "deadline_note":
-        return (q.strip(), "") if V.ROLLING_RX.search(q) else (None, "quote does not state a rolling / year-round application window")
+        return (q.strip(), "") if V.states_open_window(q) else (None, "quote does not state a rolling or currently-open application window")
     if field in V.TEXT_FIELDS:
-        return q.strip(), ""
+        why = V.topic_ok(field, q)
+        return (None, why) if why else (q.strip(), "")
     if field in ("opening_date", "closing_date"):
         dates = {h.date.isoformat() for h in P.find_dates(q)}
         return (value, "") if value in dates else (None, f"date {value} not written in quote")
@@ -148,9 +149,15 @@ def _norm_equal(field: str, a, b) -> float:
         ca, cb = canonical_url(str(a)), canonical_url(str(b))
         return 1.0 if ca == cb else (0.5 if host_of(ca) == host_of(cb) else 0.0)
     if field == "name":
-        return 1.0 if fuzz.ratio(name_key(a), name_key(b)) >= 80 else 0.0
+        ka, kb = name_key(a), name_key(b)
+        return 1.0 if (fuzz.ratio(ka, kb) >= 80 or fuzz.token_set_ratio(ka, kb) >= 88) else 0.0
     if field == "provider":
-        return 1.0 if fuzz.token_set_ratio(fold_text(a), fold_text(b)) >= 80 else 0.0
+        fa, fb = fold_text(a), fold_text(b)
+        if fuzz.token_set_ratio(fa, fb) >= 80:
+            return 1.0
+        initials = lambda t: "".join(w[0] for w in re.findall(r"[a-z]+", t) if w not in ("of", "the", "for", "and"))   # noqa: E731
+        ca, cb = re.sub(r"[^a-z]", "", fa), re.sub(r"[^a-z]", "", fb)
+        return 1.0 if (len(ca) >= 3 and initials(fb) == ca) or (len(cb) >= 3 and initials(fa) == cb) else 0.0
     return 1.0   # text fields handled by span overlap below
 
 

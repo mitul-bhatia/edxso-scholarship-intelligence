@@ -13,3 +13,5 @@ data/atlas_demo.db-*
 .DS_Store
 .vercel/
 docs/PLAN.md
+data/backups/
+data/*.bak

@@ -46,7 +46,7 @@ SCHEMA_TEXT = """Return exactly this JSON structure (every key must be present):
  "institution_requirements": {"value": "...", "quote": "..."},
  "opening_date": {"value": "YYYY-MM-DD", "quote": "..."},
  "closing_date": {"value": "YYYY-MM-DD", "quote": "..."},
- "deadline_note": {"value": "...", "quote": "(e.g. rolling / year-round applications)"},
+ "deadline_note": {"value": "...", "quote": "ONLY a sentence stating applications are rolling / year-round OR are currently open now. Never a future timeline, never a closed notice."},
  "documents_required": {"value": "...", "quote": "..."},
  "selection_process": {"value": "...", "quote": "..."},
  "renewal_requirements": {"value": "...", "quote": "..."}

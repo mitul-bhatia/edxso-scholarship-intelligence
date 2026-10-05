@@ -14,7 +14,7 @@ CSV_FIELDS = ["id", "name", "provider", "source_type", "official_domain", "offic
 
 
 def export(db: str | Path | None, out_dir: str | Path) -> dict:
-    conn = connect(db)
+    conn = connect(db, readonly=True)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     recs = rows(conn, "SELECT * FROM scholarships ORDER BY confidence DESC, id")

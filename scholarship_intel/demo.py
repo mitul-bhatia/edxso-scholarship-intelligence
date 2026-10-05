@@ -93,8 +93,15 @@ class _Plan:
             return False
         orig = c["aq"][money[0].start:money[0].end]
         raw = float(digits.group(0).replace(",", ""))
-        bumped = int(round(raw * 1.2, -2)) if raw >= 1000 else int(round(raw * 1.2))
+        if raw >= 1000:
+            bumped = int(round(raw * 1.2, -2))
+        elif raw == int(raw):
+            bumped = max(int(raw) + 1, int(round(raw * 1.2)))      # small figures (e.g. "2 Lakhs") must still visibly change
+        else:
+            bumped = round(raw * 1.2, 1)
         new_orig = orig.replace(digits.group(0), f"{bumped:,}" if "," in digits.group(0) else str(bumped), 1)
+        if new_orig == orig:
+            return False
         self.add(c, Overlay(replacements=[(re.escape(orig), new_orig)], note="amount revised"), "benefit amount revised (+20%)",
                  f"“{orig}” → “{new_orig}”")
         return True

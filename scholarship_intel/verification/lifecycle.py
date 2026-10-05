@@ -70,5 +70,5 @@ def determine(*, fetch_ok: bool, fetch_status: int, fetch_error: str, gone: bool
             return Status("EXPIRING_SOON", f"closing date {closing.isoformat()} is {(closing - today).days} day(s) away", 0)
         return Status("ACTIVE", f"closing date {closing.isoformat()} is in the future", 0)
     if has_rolling_note:
-        return Status("ACTIVE", "official page states applications are open on a rolling / year-round basis", 0)
+        return Status("ACTIVE", "official page states applications are open (rolling or currently open; no closing date published)", 0)
     return Status("REVIEW_REQUIRED", "official page does not state an application window – cannot confirm it is open", 0)

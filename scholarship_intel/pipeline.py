@@ -9,6 +9,7 @@ import datetime as dt
 import json
 import re
 import sqlite3
+import time
 from collections import Counter
 from typing import Callable
 
@@ -23,19 +24,22 @@ from .extraction import vocab as V
 from .fetcher import FetchResult, Fetcher
 from .storage.repo import Record, Repo, load_facts, make_key
 from .textproc import Haystack, fold_text
-from .util import canonical_url, host_of, is_generic_name, looks_like_list_title, registered_domain
+from .util import canonical_url, distinctive_tokens, host_of, is_generic_name, looks_like_list_title, registered_domain
 from .verification import grounding, lifecycle, scoring
+from .verification.relevance import relevance_gate
 
 
 class Pipeline:
     def __init__(self, conn: sqlite3.Connection, fetcher: Fetcher, router: LLMRouter, log: Callable[[str], None] = print,
                  max_pages: int | None = None, skip_search: bool = False, mode: str = "live", reverify_only: bool = False,
-                 discover: bool = True):
+                 discover: bool = True, force_reextract: bool = False, reextract_weak: bool = False):
         self.conn, self.f, self.router, self.log = conn, fetcher, router, log
         self.repo = Repo(conn)
         self.max_pages, self.skip_search, self.mode = max_pages, skip_search, mode
         self.reverify_only = reverify_only
         self.do_discover = discover
+        self.force_reextract = force_reextract
+        self.reextract_weak = reextract_weak
         self.stats: Counter = Counter()
         self.processed_urls: set[str] = set()
         self.saved_ids: set[int] = set()
@@ -48,6 +52,15 @@ class Pipeline:
         self._reverify_existing()
         if self.do_discover and not self.reverify_only:
             self._discover_new()
+        for r in self.conn.execute("SELECT id,name FROM scholarships").fetchall():          # self-cleaning: junk titles from earlier runs
+            if is_generic_name(r["name"]) or looks_like_list_title(r["name"]):
+                self.repo.retire(r["id"], self.run_id, "title is a question / list heading / generic label, not a programme name")
+                self.stats["retired"] += 1
+                self.log(f"  ⌫ retired junk title {r['name'][:60]!r}")
+        for lost, kept in self.repo.dedupe(self.run_id):
+            self.stats["deduplicated"] += 1
+            self.log(f"  ⌫ duplicate record #{lost} merged into #{kept}")
+        self.f.close()
         stats = dict(self.stats)
         stats["fetch"] = self.f.stats
         stats["llm_calls"] = self.router.calls
@@ -90,18 +103,91 @@ class Pipeline:
         self.conn.commit()
 
     # ================================================================== core: one document -> one record
+    def _needs_reextraction(self, existing, res: FetchResult) -> bool:
+        if not existing["facts_json"] or existing["content_hash"] != res.content_hash:
+            return True
+        if self.force_reextract:
+            return True
+        if self.reextract_weak:
+            try:
+                n = json.loads(existing["facts_json"]).get("n_extractors", 0)
+            except ValueError:
+                return True
+            return n < 2 or 80 <= (existing["confidence"] or 0) < 95
+        return False
+
     def _extract_all(self, res: FetchResult) -> list[Extraction]:
         out = [rules.extract(res.text, res.title, res.headings, res.links, res.final_url or res.url)]
-        llm_out = []
-        for prov in self.router.providers_for_extraction(2):
-            ex = llm_extractor.llm_extract(self.router, prov, res.text, res.title, res.headings, res.links, res.final_url or res.url)
-            if ex.error:
-                self.stats["llm_extract_errors"] += 1
-                self.log(f"    ! {ex.extractor}: {ex.error[:120]}")
-                continue
-            llm_out.append(ex)
-            self.stats["llm_extractions"] += 1
+        llm_out: list[Extraction] = []
+        done: set[str] = set()
+        for attempt in range(2):
+            for prov in self.router.providers_for_extraction(2):
+                if prov.name in done:
+                    continue
+                ex = llm_extractor.llm_extract(self.router, prov, res.text, res.title, res.headings, res.links, res.final_url or res.url)
+                if ex.error:
+                    self.stats["llm_extract_errors"] += 1
+                    self.log(f"    ! {ex.extractor}: {ex.error[:100]}")
+                    continue
+                llm_out.append(ex)
+                done.add(prov.name)
+                self.stats["llm_extractions"] += 1
+            if len(llm_out) >= 2 or attempt == 1:
+                break
+            wait = self.router.seconds_until_ready()          # a provider is only briefly cooling down: wait once, then retry
+            if wait is None:
+                break
+            self.log(f"    … waiting {wait:.0f}s for a rate-limited provider, then retrying")
+            time.sleep(wait + 1)
         return llm_out + out          # LLMs first (priority), rules last
+
+    _SUPPORT_LINK = re.compile(r"faq|frequently|dates?|timeline|deadline|schedule|how.?to.?apply|notice|announcement|guideline|brochure|instruction|important|apply", re.I)
+
+    def _enrich_deadline(self, res: FetchResult, name: str, facts: dict) -> None:
+        """Second-hop corroboration. Programmes often publish eligibility on one page and dates on another (FAQ, timeline,
+        notice). If the primary page has no closing date, look at same-domain supporting pages; accept a date only if the
+        page names the scholarship, the date is in the current cycle, and it is grounded in that page's own text.
+        The evidence then points at the supporting page, so the trace stays exact."""
+        if "closing_date" in facts:
+            return
+        today = config.today()
+        ay = today.year if today.month >= 6 else today.year - 1
+        lo, hi = dt.date(ay, 6, 1), dt.date(ay + 2, 6, 30)
+        base = res.final_url or res.url
+        dom = registered_domain(host_of(base))
+        toks = distinctive_tokens(name)
+        seen, tried = {canonical_url(base)}, 0
+        for ln in res.links:
+            cu = canonical_url(ln.url)
+            if cu in seen or registered_domain(host_of(ln.url)) != dom or not self._SUPPORT_LINK.search(f"{ln.text} {ln.url}"):
+                continue
+            seen.add(cu)
+            tried += 1
+            if tried > 5:
+                return
+            sup = self.f.fetch(ln.url)
+            if not sup.ok or sup.needs_ocr:
+                continue
+            folded = fold_text(sup.text)
+            if not (sum(t in folded for t in toks) >= min(2, len(toks))):
+                continue                                           # the supporting page must be about THIS scholarship
+            ex = rules.extract(sup.text, sup.title, sup.headings, sup.links, sup.final_url)
+            sub = Extraction("rules:supporting-page", {k: v for k, v in ex.claims.items() if k == "closing_date"})
+            g, _ = grounding.ground_extraction(sub, Haystack(sup.text), sup.links)
+            c = g.get("closing_date")
+            if not c:
+                continue
+            try:
+                d = dt.date.fromisoformat(c.value)
+            except ValueError:
+                continue
+            if not (lo <= d <= hi):
+                continue                                           # a date from an older / unrelated cycle is not evidence
+            c.page_id = self.repo.save_page(self.run_id, sup, "supporting", 0.0)
+            c.source_url = sup.final_url or sup.url
+            facts["closing_date"] = c
+            self.stats["deadlines_from_supporting_pages"] += 1
+            return
 
     def _process(self, res: FetchResult, existing, via: str, kscore: float | None, page_id: int | None = None) -> str:
         today = config.today()
@@ -137,11 +223,22 @@ class Pipeline:
         kscore = kscore or 0.0
         hay = Haystack(text)
 
+        # --------------------------------------------------------------- relevance gates (single programme? open to Indian students?)
+        gate = relevance_gate(host_of(res.final_url or url), sc, text, res.final_url or url)
+        if gate:
+            if existing is not None:
+                self.repo.retire(existing["id"], self.run_id, gate)
+                self.stats["retired"] += 1
+                self.log(f"  ⌫ retired {existing['name'][:55]!r}: {gate}")
+                return "retired"
+            self.stats["rejected_irrelevant"] += 1
+            return "irrelevant"
+
         # --------------------------------------------------------------- extraction (or reuse when the page is unchanged)
         reused = False
         extractions: list[Extraction] = []
         rejected_all = []
-        if existing is not None and existing["content_hash"] == res.content_hash and existing["facts_json"]:
+        if existing is not None and not self._needs_reextraction(existing, res):
             facts, absent_prev, agreement, conflicts, n_extractors, extractors = load_facts(existing["facts_json"])
             reused = True
             is_scholarship = True
@@ -164,6 +261,20 @@ class Pipeline:
             n_extractors = len(extractions)
             extractors = [e.extractor for e in extractions]
             absent_prev = {}
+            if existing is not None and existing["facts_json"] and existing["content_hash"] == res.content_hash:
+                prev = load_facts(existing["facts_json"])
+                if n_extractors < prev[4]:
+                    # Same source text, but a provider was unavailable this time: never replace a cross-checked result with a weaker one.
+                    facts, absent_prev, agreement, conflicts, n_extractors, extractors = prev
+                    reused = True
+                    is_scholarship = True
+                    self.stats["kept_prior_stronger_extraction"] += 1
+                    self.log(f"    = kept previous {prev[4]}-extractor result for {existing['name'][:50]!r} (providers unavailable now)")
+
+        # --------------------------------------------------------------- second-hop deadline corroboration
+        if facts.get("name") and is_scholarship:
+            facts = {k: v for k, v in facts.items() if not (k == "closing_date" and v.source_url)}   # re-derive supporting dates every run
+            self._enrich_deadline(res, facts["name"].value, facts)
 
         # --------------------------------------------------------------- identity
         name_claim = facts.get("name")

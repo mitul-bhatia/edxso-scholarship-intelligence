@@ -21,6 +21,9 @@ crawl:
   user_agent: "Mozilla/5.0 (compatible; AtlasScholarshipBot/1.0; research crawler for Atlas Funding prototype)"
   timeout_seconds: 20
   connect_timeout_seconds: 6
+  js_render: true              # Playwright fallback for JavaScript-only pages
+  js_render_min_chars: 400     # plain fetch with less text than this is retried with a headless browser
+  max_js_renders: 40
   per_domain_delay_seconds: 1.0
   respect_robots: true
   max_pages_per_run: 220

@@ -3,6 +3,8 @@ on:
   schedule:
     - cron: "30 1 * * *"      # daily 07:00 IST
   workflow_dispatch: {}
+permissions:
+  contents: write
 jobs:
   crawl:
     runs-on: ubuntu-latest
@@ -10,12 +12,26 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements-crawler.txt
+      - run: python -m playwright install --with-deps chromium
       - run: python -m pytest -q
       - name: Crawl (re-verify known records, then discover new ones)
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python -u -m scholarship_intel run --label "scheduled"
+      - name: Export inspectable sample data
+        run: python -m scholarship_intel export --out data/sample
+      - name: Make the SQLite file self-contained (read-only safe for Vercel)
+        run: python -m scholarship_intel snapshot
+      - name: Commit the refreshed database and exports
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/atlas.db data/sample/
+          if ! git diff --cached --quiet; then
+            git commit -m "Update scholarship crawl snapshot"
+            git push
+          fi
       - uses: actions/upload-artifact@v4
         with: { name: atlas-db, path: data/atlas.db }

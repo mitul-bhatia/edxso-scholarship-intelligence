@@ -39,6 +39,8 @@ class Grounded:
     kind: str = "QUOTE"
     agreed_by: list[str] = field(default_factory=list)     # other extractors that independently produced the same value
     conflicting: dict[str, Any] = field(default_factory=dict)   # extractor -> differing value
+    page_id: int | None = None          # set when the evidence comes from a supporting page of the same official domain
+    source_url: str | None = None
 
 
 @dataclass

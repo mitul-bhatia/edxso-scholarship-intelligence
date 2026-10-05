@@ -88,3 +88,14 @@ def test_deadline_note_must_state_an_open_window():
     q2 = "Applications are accepted throughout the year on a rolling basis."
     g, _ = ground("deadline_note", q2, q2, PAGE + q2 + "\n")
     assert "deadline_note" in g
+
+
+def test_text_field_quote_must_be_about_the_field():
+    t = PAGE + "Following a competitive national selection process, I was selected to assist the professor at the UN.\n"
+    g, rej = ground("selection_process", "x", "Following a competitive national selection process, I was selected to assist the professor at the UN.", t)
+    assert "selection_process" not in g and "first-person" in rej[0].reason          # testimonial, not a rule
+    g, _ = ground("selection_process", "x", "Selection will be based on merit in the qualifying examination.",
+                  PAGE + "Selection will be based on merit in the qualifying examination.\n")
+    assert "selection_process" in g
+    g, rej = ground("documents_required", "x", "The campus has a lovely garden and a library.", PAGE + "The campus has a lovely garden and a library.\n")
+    assert "documents_required" not in g

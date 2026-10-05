@@ -304,10 +304,14 @@ def _institution(text: str, lo: int = 0, hi: int | None = None) -> Claim | None:
 
 
 def _deadline_note(text: str) -> Claim | None:
+    best = None
     for st, en, sent in _sentences(text):
-        if V.ROLLING_RX.search(sent) and len(sent) < 400:
-            return Claim("deadline_note", sent.strip(), sent.strip(), NAME)
-    return None
+        kind = V.states_open_window(sent)
+        if kind and len(sent) < 400:
+            if kind == "rolling":
+                return Claim("deadline_note", sent.strip(), sent.strip(), NAME)
+            best = best or Claim("deadline_note", sent.strip(), sent.strip(), NAME)
+    return best
 
 
 def _application_url(links: list[Link], page_url: str) -> Claim | None:

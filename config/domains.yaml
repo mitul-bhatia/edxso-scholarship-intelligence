@@ -45,6 +45,10 @@ known_providers:
   - {domain: aicte-india.org,            name: "All India Council for Technical Education", type: GOVERNMENT,    tier: T1}
   - {domain: ugc.ac.in,                  name: "University Grants Commission",                 type: GOVERNMENT,    tier: T1}
   - {domain: nta.ac.in,                  name: "National Testing Agency",                      type: GOVERNMENT,    tier: T1}
+  - {domain: ffe.org,                    name: "Foundation for Excellence",                    type: NGO_TRUST,     tier: T3}
+  - {domain: kcmet.org,                  name: "K.C. Mahindra Education Trust",                type: NGO_TRUST,     tier: T3}
+  - {domain: sitaramjindalfoundation.org, name: "Sitaram Jindal Foundation",                   type: NGO_TRUST,     tier: T3}
+  - {domain: foryoungwomeninscience.com, name: "L'Oréal India For Young Women in Science",     type: CORPORATE_CSR, tier: T3}
   - {domain: studyinindia.gov.in,        name: "Study in India (Govt. of India)",              type: GOVERNMENT,    tier: T1}
 
 # --- Aggregators, blogs, news: DISCOVERY ONLY. Never evidence, never "official". -----------
