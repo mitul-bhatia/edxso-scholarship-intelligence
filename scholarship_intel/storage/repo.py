@@ -254,11 +254,19 @@ class Repo:
     def _write_evidence(self, sid: int, run_id: int, rec: Record, now: str) -> None:
         self.conn.execute("UPDATE field_evidence SET is_current=0 WHERE scholarship_id=?", (sid,))
         for f, g in rec.facts.items():
+            page_id = g.page_id or rec.primary_page_id
+            quote = g.quote
+            if g.start is not None and g.end is not None:
+                page = self.conn.execute("SELECT text FROM pages WHERE id=?", (page_id,)).fetchone()
+                if page and 0 <= g.start < g.end <= len(page["text"]):
+                    # Grounding tolerates PDF line wraps and typographic variants. Persist the
+                    # exact snapshot slice so evidence.quote always matches its offsets.
+                    quote = page["text"][g.start:g.end]
             self.conn.execute(
                 """INSERT INTO field_evidence(scholarship_id,run_id,field,value,quote,page_id,source_url,char_start,char_end,match_score,
                    extractor,evidence_kind,verified_at,is_current) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1)""",
-                (sid, run_id, f, json.dumps(g.value, default=str) if not isinstance(g.value, str) else g.value, g.quote,
-                 g.page_id or rec.primary_page_id, g.source_url or rec.official_url, g.start, g.end, g.match_score,
+                (sid, run_id, f, json.dumps(g.value, default=str) if not isinstance(g.value, str) else g.value, quote,
+                 page_id, g.source_url or rec.official_url, g.start, g.end, g.match_score,
                  ",".join([g.extractor] + g.agreed_by), "QUOTE", now))
         for f, (verified, note) in rec.absent.items():
             if f in rec.facts:
