@@ -8023,5 +8023,50 @@
   "new_evidence": null,
   "note": "newly discovered scholarship",
   "scholarship": "FOR THE SCHEME OF MAULANA AZAD NATIONAL FELLOWSHIP"
+ },
+ {
+  "id": 618,
+  "scholarship_id": 54,
+  "run_id": 22,
+  "field": "status",
+  "change_type": "STATUS_CHANGED",
+  "old_value": "REVIEW_REQUIRED",
+  "new_value": "NO_LONGER_VERIFIABLE",
+  "detected_at": "2026-10-10 07:37:08",
+  "source_url": "https://www2.daad.de/deutschland/stipendium/datenbank/en/21148-scholarship-database/?detail=57135739",
+  "old_evidence": null,
+  "new_evidence": null,
+  "note": "official source unreachable on 3 consecutive runs (HTTP 403)",
+  "scholarship": "Doctoral Programmes in Germany"
+ },
+ {
+  "id": 619,
+  "scholarship_id": 65,
+  "run_id": 22,
+  "field": "status",
+  "change_type": "STATUS_CHANGED",
+  "old_value": "ACTIVE",
+  "new_value": "NO_LONGER_VERIFIABLE",
+  "detected_at": "2026-10-10 07:37:42",
+  "source_url": "https://www.ugc.gov.in/pdfnews/4188867_BSR-Faculty-Fellowship-revised-guidelines.pdf",
+  "old_evidence": null,
+  "new_evidence": null,
+  "note": "scholarship is no longer identifiable on the official page (name/content absent)",
+  "scholarship": "UGC – BSR Faculty Fellowship Scheme"
+ },
+ {
+  "id": 620,
+  "scholarship_id": 80,
+  "run_id": 22,
+  "field": "status",
+  "change_type": "STATUS_CHANGED",
+  "old_value": "REVIEW_REQUIRED",
+  "new_value": "NO_LONGER_VERIFIABLE",
+  "detected_at": "2026-10-10 07:38:37",
+  "source_url": "https://www.daad.in/en/study-research-in-germany/studying-in-germany/phd-studies/",
+  "old_evidence": null,
+  "new_evidence": null,
+  "note": "official source unreachable on 3 consecutive runs (HTTP 403)",
+  "scholarship": "The DAAD offers a number of scholarships to support this:"
  }
 ]
