@@ -8188,5 +8188,35 @@
   "new_evidence": null,
   "note": "newly discovered scholarship",
   "scholarship": "The Inlaks-Weidenfeld-Hoffmann Scholarship"
+ },
+ {
+  "id": 629,
+  "scholarship_id": 32,
+  "run_id": 25,
+  "field": "status",
+  "change_type": "STATUS_CHANGED",
+  "old_value": "REVIEW_REQUIRED",
+  "new_value": "EXPIRED",
+  "detected_at": "2026-10-13 08:11:11",
+  "source_url": "https://www.scholarships.reliancefoundation.org/UG_Scholarship",
+  "old_evidence": null,
+  "new_evidence": null,
+  "note": "closing date 2026-10-05 has passed (as of 2026-10-13)",
+  "scholarship": "Reliance Foundation Undergraduate Scholarships"
+ },
+ {
+  "id": 630,
+  "scholarship_id": 87,
+  "run_id": 25,
+  "field": "*",
+  "change_type": "NEW",
+  "old_value": null,
+  "new_value": "West Bengal Higher Secondary Programs for 2026",
+  "detected_at": "2026-10-13 08:25:06",
+  "source_url": "https://www.vidyadhan.org/apply/bengali/502",
+  "old_evidence": null,
+  "new_evidence": null,
+  "note": "newly discovered scholarship",
+  "scholarship": "West Bengal Higher Secondary Programs for 2026"
  }
 ]
