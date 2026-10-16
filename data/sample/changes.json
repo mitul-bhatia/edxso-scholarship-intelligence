@@ -8218,5 +8218,20 @@
   "new_evidence": "Reliance Foundation invites first year postgraduate students who are enrolled full-time in an eligible degree programme (in Computer Science, Artificial Intelligence, Mathematics & Computing, Electrical and/or Electronics Engg., Chemical Engg., Mechanical Engg., Renewable & New Energy, Material Science & Engg. and Life Sciences) to apply.",
   "note": "CHANGE DETECTED",
   "scholarship": "Reliance Foundation Postgraduate Scholarships"
+ },
+ {
+  "id": 650,
+  "scholarship_id": 89,
+  "run_id": 28,
+  "field": "*",
+  "change_type": "NEW",
+  "old_value": null,
+  "new_value": "Personal Loan in khandwa",
+  "detected_at": "2026-10-16 06:29:18",
+  "source_url": "https://www.tatacapital.com/personal-loan/personal-loan-in-khandwa.html",
+  "old_evidence": null,
+  "new_evidence": null,
+  "note": "newly discovered scholarship",
+  "scholarship": "Personal Loan in khandwa"
  }
 ]
