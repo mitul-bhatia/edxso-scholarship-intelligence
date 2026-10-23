@@ -9103,5 +9103,50 @@
   "new_evidence": "ntrated period of artistic creation, interaction and growth. Application Status Applications Closed Residency Dates: 5th June 2027 - 7th August 2027 Duration and Value The summer",
   "note": "official page states: “ntrated period of artistic creation, interaction and growth. Application Status Applications Closed Residency Dates: 5th June 2027 - 7th August 2027 Duration and Value The summer”",
   "scholarship": "The Inlaks Foundation in partnership with Skowhegan offers a 9 week summer art program for an artist based in India in Maine, USA."
+ },
+ {
+  "id": 709,
+  "scholarship_id": 54,
+  "run_id": 35,
+  "field": "status",
+  "change_type": "STATUS_CHANGED",
+  "old_value": "REVIEW_REQUIRED",
+  "new_value": "NO_LONGER_VERIFIABLE",
+  "detected_at": "2026-10-23 06:21:50",
+  "source_url": "https://www2.daad.de/deutschland/stipendium/datenbank/en/21148-scholarship-database/?detail=57135739",
+  "old_evidence": null,
+  "new_evidence": null,
+  "note": "official source unreachable on 3 consecutive runs (HTTP 403)",
+  "scholarship": "Doctoral Programmes in Germany"
+ },
+ {
+  "id": 710,
+  "scholarship_id": 80,
+  "run_id": 35,
+  "field": "status",
+  "change_type": "STATUS_CHANGED",
+  "old_value": "REVIEW_REQUIRED",
+  "new_value": "NO_LONGER_VERIFIABLE",
+  "detected_at": "2026-10-23 06:22:54",
+  "source_url": "https://www.daad.in/en/study-research-in-germany/studying-in-germany/phd-studies/",
+  "old_evidence": null,
+  "new_evidence": null,
+  "note": "official source unreachable on 3 consecutive runs (HTTP 403)",
+  "scholarship": "The DAAD offers a number of scholarships to support this:"
+ },
+ {
+  "id": 711,
+  "scholarship_id": 88,
+  "run_id": 35,
+  "field": "status",
+  "change_type": "STATUS_CHANGED",
+  "old_value": "REVIEW_REQUIRED",
+  "new_value": "NO_LONGER_VERIFIABLE",
+  "detected_at": "2026-10-23 06:23:16",
+  "source_url": "https://www.daad.in/en/study-research-in-germany/studying-in-germany/daad-scholarships/research-grants-doctoral-degree-in-germany-phd/",
+  "old_evidence": null,
+  "new_evidence": null,
+  "note": "official source unreachable on 3 consecutive runs (HTTP 403)",
+  "scholarship": "Research Grants"
  }
 ]
