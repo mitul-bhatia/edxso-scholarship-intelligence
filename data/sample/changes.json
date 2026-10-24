@@ -9148,5 +9148,50 @@
   "new_evidence": null,
   "note": "official source unreachable on 3 consecutive runs (HTTP 403)",
   "scholarship": "Research Grants"
+ },
+ {
+  "id": 712,
+  "scholarship_id": 54,
+  "run_id": 36,
+  "field": "status",
+  "change_type": "STATUS_CHANGED",
+  "old_value": "NO_LONGER_VERIFIABLE",
+  "new_value": "REVIEW_REQUIRED",
+  "detected_at": "2026-10-24 06:17:41",
+  "source_url": "https://www2.daad.de/deutschland/stipendium/datenbank/en/21148-scholarship-database/?detail=57135739",
+  "old_evidence": null,
+  "new_evidence": null,
+  "note": "official page does not state an application window – cannot confirm it is open",
+  "scholarship": "Doctoral Programmes in Germany"
+ },
+ {
+  "id": 713,
+  "scholarship_id": 80,
+  "run_id": 36,
+  "field": "status",
+  "change_type": "STATUS_CHANGED",
+  "old_value": "NO_LONGER_VERIFIABLE",
+  "new_value": "REVIEW_REQUIRED",
+  "detected_at": "2026-10-24 06:18:46",
+  "source_url": "https://www.daad.in/en/study-research-in-germany/studying-in-germany/phd-studies/",
+  "old_evidence": null,
+  "new_evidence": null,
+  "note": "official page does not state an application window – cannot confirm it is open",
+  "scholarship": "The DAAD offers a number of scholarships to support this:"
+ },
+ {
+  "id": 714,
+  "scholarship_id": 88,
+  "run_id": 36,
+  "field": "status",
+  "change_type": "STATUS_CHANGED",
+  "old_value": "NO_LONGER_VERIFIABLE",
+  "new_value": "EXPIRED",
+  "detected_at": "2026-10-24 06:19:00",
+  "source_url": "https://www.daad.in/en/study-research-in-germany/studying-in-germany/daad-scholarships/research-grants-doctoral-degree-in-germany-phd/",
+  "old_evidence": null,
+  "new_evidence": null,
+  "note": "closing date 2024-10-21 has passed (as of 2026-10-24)",
+  "scholarship": "Research Grants"
  }
 ]
